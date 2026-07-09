@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>午餐大轉輪</title>
+</head>
+<body>
+<!--ARTIFACT-START-->
+<style>
+  :root {
+    --bg: #F4F2EC;
+    --surface: #FFFFFF;
+    --surface-2: #FAF8F2;
+    --text: #26221B;
+    --text-2: #6F675A;
+    --line: #E4DFD3;
+    --accent: #1F6E5C;
+    --accent-soft: #E3EFEA;
+    --accent-ink: #FFFFFF;
+    --action: #D9482B;
+    --action-hover: #C13E24;
+    --action-ink: #FFF8F2;
+    --amber: #E8A33D;
+    --chip-bg: #EFEBE1;
+    --shadow: 0 10px 30px rgba(38, 34, 27, .10);
+    --shadow-lg: 0 18px 50px rgba(38, 34, 27, .18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #191613;
+      --surface: #221E19;
+      --surface-2: #2A251F;
+      --text: #F0EAE0;
+      --text-2: #A89F90;
+      --line: #3A342C;
+      --accent: #3FA98D;
+      --accent-soft: #24352F;
+      --accent-ink: #10241E;
+      --action: #E05A3B;
+      --action-hover: #EF6947;
+      --action-ink: #FFF4EE;
+      --amber: #E0A54E;
+      --chip-bg: #332D25;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+      --shadow-lg: 0 18px 50px rgba(0, 0, 0, .5);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F2EC;
+    --surface: #FFFFFF;
+    --surface-2: #FAF8F2;
+    --text: #26221B;
+    --text-2: #6F675A;
+    --line: #E4DFD3;
+    --accent: #1F6E5C;
+    --accent-soft: #E3EFEA;
+    --accent-ink: #FFFFFF;
+    --action: #D9482B;
+    --action-hover: #C13E24;
+    --action-ink: #FFF8F2;
+    --amber: #E8A33D;
+    --chip-bg: #EFEBE1;
+    --shadow: 0 10px 30px rgba(38, 34, 27, .10);
+    --shadow-lg: 0 18px 50px rgba(38, 34, 27, .18);
+  }
+  :root[data-theme="dark"] {
+    --bg: #191613;
+    --surface: #221E19;
+    --surface-2: #2A251F;
+    --text: #F0EAE0;
+    --text-2: #A89F90;
+    --line: #3A342C;
+    --accent: #3FA98D;
+    --accent-soft: #24352F;
+    --accent-ink: #10241E;
+    --action: #E05A3B;
+    --action-hover: #EF6947;
+    --action-ink: #FFF4EE;
+    --amber: #E0A54E;
+    --chip-bg: #332D25;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, .5);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", "Heiti TC", sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app { max-width: 1020px; margin: 0 auto; padding: 28px 20px 48px; }
+
+  /* ── header ── */
+  header.masthead { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+  .brand {
+    font-size: 34px; font-weight: 900; letter-spacing: 2px; margin: 0;
+    display: inline-flex; align-items: baseline;
+  }
+  .brand .zhuan {
+    display: inline-block; color: var(--action);
+    transition: transform .3s;
+  }
+  .brand.spinning .zhuan { animation: zhuan-spin 1s linear infinite; }
+  @keyframes zhuan-spin { to { transform: rotate(360deg); } }
+  .locale {
+    font-size: 13px; color: var(--text-2); letter-spacing: 1px;
+  }
+  .locale strong { color: var(--accent); font-weight: 700; }
+
+  /* ── layout ── */
+  main.board { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
+  @media (max-width: 860px) { main.board { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 18px; box-shadow: var(--shadow);
+  }
+
+  /* ── wheel panel ── */
+  .wheel-panel { padding: 26px 22px 30px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .match-count {
+    font-size: 14px; color: var(--text-2); letter-spacing: 1px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .match-count b { color: var(--text); font-size: 18px; font-variant-numeric: tabular-nums; }
+
+  .wheel-stage { position: relative; width: min(100%, 430px); aspect-ratio: 1; }
+  canvas#wheel { width: 100%; height: 100%; display: block; }
+  .pointer {
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; z-index: 3;
+    border-left: 15px solid transparent; border-right: 15px solid transparent;
+    border-top: 30px solid var(--action);
+    filter: drop-shadow(0 3px 3px rgba(0,0,0,.25));
+  }
+  .hub {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 25%; aspect-ratio: 1; border-radius: 50%;
+    background: var(--action); color: var(--action-ink);
+    border: 5px solid var(--surface);
+    font: inherit; font-size: clamp(22px, 5vw, 30px); font-weight: 900; letter-spacing: 3px;
+    cursor: pointer; z-index: 2; box-shadow: var(--shadow);
+    transition: transform .15s, background .15s;
+  }
+  .hub:hover:not(:disabled) { background: var(--action-hover); transform: translate(-50%, -50%) scale(1.05); }
+  .hub:active:not(:disabled) { transform: translate(-50%, -50%) scale(.96); }
+  .hub:disabled { cursor: not-allowed; filter: saturate(.4) brightness(.85); }
+  .hub:focus-visible, button:focus-visible, a.btn:focus-visible {
+    outline: 3px solid var(--amber); outline-offset: 2px;
+  }
+  .empty-note {
+    position: absolute; inset: 0; display: none; z-index: 4;
+    align-items: center; justify-content: center; text-align: center;
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    border-radius: 50%; padding: 18%; font-size: 15px; color: var(--text-2);
+  }
+  .wheel-stage.empty .empty-note { display: flex; }
+  .wheel-stage.empty .hub { display: none; }
+
+  .hint { font-size: 12.5px; color: var(--text-2); }
+
+  /* ── controls (order slip) ── */
+  .slip { padding: 22px 20px; display: flex; flex-direction: column; gap: 20px; }
+  .slip h2 {
+    margin: 0; font-size: 15px; letter-spacing: 4px; color: var(--accent);
+    border-bottom: 2px dashed var(--line); padding-bottom: 12px;
+  }
+  .field label { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: 700; }
+  .field output {
+    color: var(--action); font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums;
+  }
+  input[type="range"] {
+    width: 100%; margin: 10px 0 0; appearance: none; -webkit-appearance: none;
+    height: 6px; border-radius: 3px; background: var(--chip-bg); outline-offset: 4px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); border: 3px solid var(--surface);
+    box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); border: 3px solid var(--surface);
+    box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: pointer;
+  }
+  .scale-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-2); margin-top: 3px; }
+
+  .cats-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .cats-head span { font-size: 14px; font-weight: 700; }
+  .cats-head button {
+    background: none; border: none; color: var(--accent); font: inherit; font-size: 12.5px;
+    cursor: pointer; padding: 2px 4px;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip {
+    border: 1.5px solid var(--line); background: var(--surface-2); color: var(--text-2);
+    border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
+    transition: all .12s;
+  }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .chip .n { opacity: .75; font-size: 11.5px; margin-left: 3px; font-variant-numeric: tabular-nums; }
+
+  .skip-note { font-size: 12.5px; color: var(--text-2); }
+  .skip-note button { background: none; border: none; color: var(--action); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; padding: 0; }
+
+  /* ── list ── */
+  details.roster { margin-top: 26px; }
+  details.roster summary {
+    cursor: pointer; font-weight: 700; font-size: 15px; color: var(--text-2);
+    padding: 10px 4px; user-select: none;
+  }
+  .roster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 10px; }
+  .r-row {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px;
+  }
+  .r-row.skipped { opacity: .45; }
+  .r-row .r-name { font-weight: 700; font-size: 14.5px; display: flex; justify-content: space-between; gap: 8px; }
+  .r-row .r-meta { color: var(--text-2); display: flex; gap: 10px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  .r-row .r-note { color: var(--text-2); font-size: 12.5px; }
+  .r-row .unskip { background: none; border: none; color: var(--action); font: inherit; font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; white-space: nowrap; }
+
+  footer.colophon { margin-top: 34px; font-size: 12px; color: var(--text-2); text-align: center; letter-spacing: .5px; }
+
+  /* ── result modal ── */
+  .veil {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(20, 16, 12, .55); backdrop-filter: blur(3px);
+  }
+  .veil.show { display: flex; }
+  .ticket {
+    background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg);
+    width: min(430px, 100%); padding: 12px; position: relative;
+    animation: pop .35s cubic-bezier(.2, 1.4, .4, 1);
+  }
+  @keyframes pop { from { transform: scale(.7); opacity: 0; } }
+  .ticket-inner {
+    border: 2px dashed var(--line); border-radius: 14px; padding: 26px 22px 22px;
+    display: flex; flex-direction: column; gap: 14px; text-align: center;
+  }
+  .ticket .eyebrow { font-size: 13px; letter-spacing: 5px; color: var(--accent); font-weight: 700; }
+  .ticket .r-title { font-size: 30px; font-weight: 900; line-height: 1.25; text-wrap: balance; margin: 0; }
+  .ticket .badges { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .badge {
+    background: var(--chip-bg); border-radius: 999px; padding: 4px 12px; font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .badge.money { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .ticket .addr { font-size: 13.5px; color: var(--text-2); }
+  .ticket .note { font-size: 13px; color: var(--amber); font-weight: 700; }
+  .ticket .actions { display: flex; flex-direction: column; gap: 9px; margin-top: 6px; }
+  .btn {
+    border: none; border-radius: 12px; padding: 12px 16px; font: inherit; font-size: 15px;
+    font-weight: 700; cursor: pointer; text-decoration: none; display: block; text-align: center;
+    transition: filter .12s, transform .12s;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:active { transform: scale(.98); }
+  .btn-go { background: var(--accent); color: var(--accent-ink); }
+  .btn-again { background: var(--chip-bg); color: var(--text); }
+  .btn-skip { background: none; color: var(--text-2); font-weight: 400; font-size: 13.5px; text-decoration: underline; padding: 6px; }
+  .ticket .close {
+    position: absolute; top: 10px; right: 14px; background: none; border: none;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px;
+  }
+
+  /* ── confetti ── */
+  .confetti {
+    position: fixed; z-index: 60; top: -20px; pointer-events: none;
+    animation: fall linear forwards;
+  }
+  @keyframes fall {
+    to { transform: translateY(105vh) rotate(720deg); opacity: .6; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .brand.spinning .zhuan { animation: none; }
+    .ticket { animation: none; }
+    .confetti { display: none; }
+  }
+</style>
+
+<div class="app">
+  <header class="masthead">
+    <h1 class="brand" id="brand">午餐大<span class="zhuan">轉</span>輪</h1>
+    <div class="locale">出發點 <strong>基隆路一段 200 號</strong>｜步行圈內平價午餐</div>
+  </header>
+
+  <main class="board">
+    <section class="card wheel-panel" aria-label="轉輪">
+      <div class="match-count">今天可轉 <b id="count">0</b> 家</div>
+      <div class="wheel-stage" id="stage">
+        <div class="pointer" aria-hidden="true"></div>
+        <canvas id="wheel" width="1000" height="1000" aria-label="午餐轉輪"></canvas>
+        <button class="hub" id="spinBtn">轉！</button>
+        <div class="empty-note">沒有符合條件的店 😥<br>放寬一點預算或走路時間吧</div>
+      </div>
+      <div class="hint">按中間的「轉！」或按空白鍵，午餐就交給命運<br>店家超過 36 家時輪面不顯示店名，轉到誰看結果卡揭曉</div>
+    </section>
+
+    <aside class="card slip" aria-label="今日條件">
+      <h2>今日條件</h2>
+
+      <div class="field">
+        <label for="budget">預算上限（人均）<output id="budgetOut">NT$500</output></label>
+        <input type="range" id="budget" min="0" max="1000" step="50" value="1000">
+        <div class="scale-ends"><span>NT$0</span><span>NT$1000</span></div>
+      </div>
+
+      <div class="field">
+        <label for="walk">走路時間上限<output id="walkOut">10 分鐘</output></label>
+        <input type="range" id="walk" min="2" max="10" step="1" value="10">
+        <div class="scale-ends"><span>2 分</span><span>10 分</span></div>
+      </div>
+
+      <div>
+        <div class="cats-head">
+          <span>想吃的類別</span>
+          <span>
+            <button id="allCats">全選</button>·<button id="noCats">清空</button>
+          </span>
+        </div>
+        <div class="chips" id="chips"></div>
+      </div>
+
+      <div class="skip-note" id="skipNote" hidden>
+        今天已跳過 <b id="skipCount">0</b> 家 · <button id="clearSkips">全部恢復</button>
+      </div>
+    </aside>
+  </main>
+
+  <details class="roster">
+    <summary>看看今天名單裡有哪些店 ▾</summary>
+    <div class="roster-grid" id="roster"></div>
+  </details>
+
+  <footer class="colophon">
+    人均消費與步行時間為估計值，以基隆路一段 200 號為起點 · 出發前建議先查當日營業時間
+  </footer>
+</div>
+
+<div class="veil" id="veil">
+  <div class="ticket" role="dialog" aria-modal="true" aria-labelledby="rTitle">
+    <button class="close" id="closeModal" aria-label="關閉">×</button>
+    <div class="ticket-inner">
+      <div class="eyebrow">今日午餐就決定是</div>
+      <h3 class="r-title" id="rTitle"></h3>
+      <div class="badges" id="rBadges"></div>
+      <div class="addr" id="rAddr"></div>
+      <div class="note" id="rNote"></div>
+      <div class="actions">
+        <a class="btn btn-go" id="rMap" target="_blank" rel="noopener">🗺️ 開 Google 地圖出發</a>
+        <button class="btn btn-again" id="rAgain">手滑了，再轉一次</button>
+        <button class="btn btn-skip" id="rSkip">今天不想吃這家，跳過它再轉</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════ 資料 ══════════ */
+/* DATA-START */
+const RESTAURANTS = [
+  {"name":"Yes me 手研早餐","cat":"台式小吃","price":[60,200],"walk":1,"addr":"","note":"★4.4（443則）","ll":[25.04013,121.56278]},
+  {"name":"JIA JIA越南食坊","cat":"東南亞","price":[60,200],"walk":1,"addr":"","note":"★3.9（136則）","ll":[25.04024,121.56273]},
+  {"name":"七分飽手作健康餐盒","cat":"健康餐盒","price":[60,200],"walk":1,"addr":"","note":"★4.3（216則）","ll":[25.04013,121.56278]},
+  {"name":"北方大陸餅&靜姐麵攤","cat":"其他","price":[60,200],"walk":1,"addr":"Next to 「No . 19 逸仙路42巷」","note":"★4.2（31則）","ll":[25.04024,121.56297]},
+  {"name":"春發汕頭乾拌麵","cat":"其他","price":[60,200],"walk":1,"addr":"逸仙路42巷11號","note":"★4.1（695則）","ll":[25.04027,121.5626]},
+  {"name":"無名大腸麵線","cat":"麵食","price":[80,180],"walk":1,"addr":"逸仙路42巷19號1樓","note":"價位為類別估計","ll":[25.04024,121.56295]},
+  {"name":"麻雀屋早午餐店","cat":"咖啡輕食","price":[60,200],"walk":1,"addr":"逸仙路42巷16號","note":"★3.9（47則）","ll":[25.04013,121.56278]},
+  {"name":"寶吉祥蔬食料理廚房","cat":"健康餐盒","price":[130,260],"walk":1,"addr":"","note":"價位為類別估計","ll":[25.0403,121.56313]},
+  {"name":"亮萌私房料理","cat":"其他","price":[100,300],"walk":1,"addr":"","note":"價位為類別估計","ll":[25.04028,121.56278]},
+  {"name":"王鍋屋","cat":"其他","price":[100,300],"walk":1,"addr":"","note":"價位為類別估計","ll":[25.04041,121.56267]},
+  {"name":"元食cafe","cat":"咖啡輕食","price":[150,350],"walk":1,"addr":"","note":"價位為類別估計","ll":[25.04031,121.5629]},
+  {"name":"HANNA Pasta Café パスタ カフェ","cat":"西式","price":[200,400],"walk":1,"addr":"","note":"★4.5（1,530則）","ll":[25.04028,121.56289]},
+  {"name":"Knock Knock Coffee｜遠雄BEONE店","cat":"咖啡輕食","price":[200,400],"walk":1,"addr":"基隆路一段200號B1F","note":"★5.0（9則）","ll":[25.04028,121.56349]},
+  {"name":"請請義大利餐廳","cat":"西式","price":[250,550],"walk":1,"addr":"","note":"價位為類別估計","ll":[25.04053,121.56278]},
+  {"name":"旬味自然鍋物","cat":"鍋物","price":[280,600],"walk":1,"addr":"逸仙路50巷18號","note":"價位為類別估計","ll":[25.04051,121.56269]},
+  {"name":"Osteria","cat":"西式","price":[400,600],"walk":1,"addr":"忠孝東路五段68號","note":"★4.3（3,101則）","ll":[25.04054,121.5628]},
+  {"name":"Saturn Landing Turkish Coffee","cat":"咖啡輕食","price":[400,600],"walk":1,"addr":"逸仙路42巷19號","note":"★4.7（1,701則）","ll":[25.04026,121.56298]},
+  {"name":"湯吉鍋物TANG JI (原 旬味 自然鍋物)-台北美食 信義區美食 信義區火鍋 信義區好吃推薦 信義區火鍋推薦 信義東區美食 台北大巨蛋美食 個人火鍋 火鍋美食","cat":"鍋物","price":[400,800],"walk":1,"addr":"逸仙路50巷18號","note":"★4.8（1,473則）","ll":[25.04051,121.56266]},
+  {"name":"王鍋屋-火鍋專門店 Shabu Ong｜台北鍋際大賞鍋王·台灣十大鍋物·台灣觀光局推薦特色鍋物·外交部招待邦交元首餐廳·各大媒體報導餐廳·大巨蛋美食·台北市政府美食·台北市議會美食·信義區大安區東區美食·酸白菜火鍋·政商藝人美食家愛店·國父紀念館美食","cat":"鍋物","price":[400,1200],"walk":1,"addr":"","note":"★4.6（1,372則）","ll":[25.04044,121.56264]},
+  {"name":"小鳳軒自助餐","cat":"飯食便當","price":[70,120],"walk":2,"addr":"基隆路一段147巷10號","note":"佛心計價自助餐，滷腿排35元起，上班族最愛"},
+  {"name":"騏麟素食館","cat":"健康餐盒","price":[60,200],"walk":2,"addr":"逸仙路50巷14號","note":"★4.4（400則）","ll":[25.04031,121.56247]},
+  {"name":"Louisa Coffee","cat":"咖啡輕食","price":[60,200],"walk":2,"addr":"逸仙路50巷6號","note":"★3.2（781則）","ll":[25.04135,121.56597]},
+  {"name":"飯點台式自助餐","cat":"飯食便當","price":[90,180],"walk":2,"addr":"","note":"價位為類別估計","ll":[25.04055,121.56236]},
+  {"name":"酒窖餐廳","cat":"其他","price":[100,300],"walk":2,"addr":"","note":"價位為類別估計","ll":[25.0399,121.56226]},
+  {"name":"夏威夷餐廳","cat":"其他","price":[100,300],"walk":2,"addr":"","note":"價位為類別估計","ll":[25.03992,121.56258]},
+  {"name":"30 Thirty","cat":"其他","price":[100,300],"walk":2,"addr":"","note":"價位為類別估計","ll":[25.03968,121.56245]},
+  {"name":"TSUTAYA BOOKSTORE 信義店","cat":"其他","price":[100,300],"walk":2,"addr":"","note":"★4.2（2,479則） · 價位為類別估計","ll":[25.0406,121.56483]},
+  {"name":"路易莎咖啡","cat":"咖啡輕食","price":[150,350],"walk":2,"addr":"","note":"價位為類別估計","ll":[25.04055,121.5622]},
+  {"name":"Curista Coffee 奎士咖啡","cat":"咖啡輕食","price":[150,350],"walk":2,"addr":"","note":"價位為類別估計","ll":[25.04147,121.56405]},
+  {"name":"AWESOME BURGER 澳森漢堡","cat":"西式","price":[200,300],"walk":2,"addr":"基隆路一段190巷11號","note":"小型美式漢堡店，品質好價格平實"},
+  {"name":"Chubby Burger 恰彼漢堡","cat":"西式","price":[200,320],"walk":2,"addr":"基隆路一段165號","note":"Smash burger壓扁式漢堡，邊緣酥脆","ll":[25.04171,121.56521]},
+  {"name":"怡客咖啡","cat":"咖啡輕食","price":[200,400],"walk":2,"addr":"逸仙路50巷12號","note":"★4.2（663則）","ll":[25.04052,121.56248]},
+  {"name":"嵐山日本料理","cat":"日式","price":[200,420],"walk":2,"addr":"","note":"價位為類別估計","ll":[25.04031,121.56223]},
+  {"name":"PIZZA PARK","cat":"西式","price":[250,550],"walk":2,"addr":"","note":"價位為類別估計","ll":[25.03951,121.56235]},
+  {"name":"布朗尼咖啡餐廳Brownies Cafe","cat":"咖啡輕食","price":[400,600],"walk":2,"addr":"","note":"★4.3（370則）","ll":[25.04033,121.56207]},
+  {"name":"30 BRUNCH","cat":"咖啡輕食","price":[400,1200],"walk":2,"addr":"逸仙路26巷17號","note":"★4.4（1,891則）","ll":[25.03978,121.56245]},
+  {"name":"佳佳甜品","cat":"其他","price":[60,120],"walk":3,"addr":"基隆路一段145-2號","note":"米其林推薦港式糖水，芝麻糊核桃糊香濃"},
+  {"name":"Mister Donut","cat":"台式小吃","price":[60,150],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04087,121.56528]},
+  {"name":"21風味館","cat":"台式小吃","price":[60,150],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04064,121.56524]},
+  {"name":"二代福林福州乾拌麵","cat":"麵食","price":[60,200],"walk":3,"addr":"","note":"★4.0（773則）","ll":[25.04203,121.56324]},
+  {"name":"小南門 傳統豆花","cat":"其他","price":[60,200],"walk":3,"addr":"松高路11號B2","note":"★3.0（17則）","ll":[25.03967,121.56536]},
+  {"name":"Cuppa Cuppa","cat":"咖啡輕食","price":[60,200],"walk":3,"addr":"忠孝東路四段559巷12號","note":"★4.8（404則）","ll":[25.04215,121.56374]},
+  {"name":"巢飯麵食館","cat":"麵食","price":[60,200],"walk":3,"addr":"基隆路一段190巷5號號","note":"★4.4（775則）","ll":[25.04205,121.56435]},
+  {"name":"興葉蚵仔煎 統一時代台北店","cat":"台式小吃","price":[60,200],"walk":3,"addr":"忠孝東路五段8號","note":"★2.9（68則）","ll":[25.04062,121.56534]},
+  {"name":"老蔡水煎包 市府店","cat":"台式小吃","price":[60,200],"walk":3,"addr":"忠孝東路五段8號美食街B2","note":"★2.6（139則）","ll":[25.04058,121.56504]},
+  {"name":"薇辣咖哩飯/便當","cat":"飯食便當","price":[60,200],"walk":3,"addr":"","note":"★4.7（85則）","ll":[25.04202,121.5643]},
+  {"name":"丸亀製麵 統一時代百貨店 烏龍麵餐廳","cat":"日式","price":[60,200],"walk":3,"addr":"菸廠路88號B1","note":"★4.0（513則）","ll":[25.04457,121.56127]},
+  {"name":"老哥（雞肉飯·乾拌麵）","cat":"飯食便當","price":[60,200],"walk":3,"addr":"忠孝東路四段559巷8-1號","note":"★3.9（647則）","ll":[25.04195,121.56372]},
+  {"name":"Starbucks星巴克 台北時代門市","cat":"咖啡輕食","price":[60,200],"walk":3,"addr":"忠孝東路五段8號2F","note":"★2.5（117則）","ll":[25.04061,121.5654]},
+  {"name":"好咖啡拿鐵專賣店","cat":"咖啡輕食","price":[60,200],"walk":3,"addr":"忠孝東路四段559巷12號","note":"★4.3（122則）","ll":[25.04205,121.56378]},
+  {"name":"12mini快煮小火鍋 台北統一時代店","cat":"鍋物","price":[60,200],"walk":3,"addr":"忠孝東路五段8號B2","note":"★4.4（348則）","ll":[25.04085,121.5654]},
+  {"name":"平田驛便當","cat":"飯食便當","price":[90,180],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04056,121.56522]},
+  {"name":"Smith X Hsu 現代茶館","cat":"其他","price":[100,300],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04064,121.56544]},
+  {"name":"杏桃鬆餅屋 UZNA OMOM","cat":"其他","price":[100,300],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04038,121.56553]},
+  {"name":"府城擔仔麵虱目魚","cat":"其他","price":[100,300],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04038,121.56533]},
+  {"name":"泰昌餅家","cat":"其他","price":[100,300],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04025,121.56533]},
+  {"name":"逸鮮棧","cat":"其他","price":[100,300],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04071,121.56197]},
+  {"name":"石亭別棧","cat":"其他","price":[100,300],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04089,121.56196]},
+  {"name":"大初 Tenppanyaki","cat":"其他","price":[100,300],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.0422,121.56349]},
+  {"name":"好餓哦","cat":"其他","price":[100,300],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.03954,121.56216]},
+  {"name":"豆工房咖啡","cat":"咖啡輕食","price":[150,350],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04129,121.56527]},
+  {"name":"天仁喫茶趣","cat":"咖啡輕食","price":[150,350],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04045,121.56524]},
+  {"name":"喬尼亞咖啡 統一時代台北店(Breville, Delonghi咖啡機體驗店)","cat":"咖啡輕食","price":[150,350],"walk":3,"addr":"忠孝東路五段8號6樓","note":"★4.0（18則） · 價位為類別估計","ll":[25.04085,121.5654]},
+  {"name":"博多天麩羅 山海","cat":"日式","price":[200,400],"walk":3,"addr":"","note":"★4.3（2,646則）","ll":[25.04059,121.56522]},
+  {"name":"韓姜熙의小廚房 Dream Plaza店","cat":"韓式","price":[200,400],"walk":3,"addr":"","note":"★4.1（275則）","ll":[25.03967,121.56536]},
+  {"name":"首塢爾韓式料理","cat":"韓式","price":[200,400],"walk":3,"addr":"忠孝東路五段8號","note":"★2.7（51則）","ll":[25.04067,121.56544]},
+  {"name":"麵屋武藏 信義店","cat":"其他","price":[200,400],"walk":3,"addr":"松高路11號B2","note":"★4.3（341則）","ll":[25.03985,121.56539]},
+  {"name":"麵屋一燈 信義統一時代店 B2","cat":"日式","price":[200,400],"walk":3,"addr":"忠孝東路五段8號號 B2","note":"★4.5（2,104則）","ll":[25.03675,121.56732]},
+  {"name":"段純貞 台北時代二館店","cat":"麵食","price":[200,400],"walk":3,"addr":"松高路11號B2","note":"★3.6（65則）","ll":[25.03967,121.56536]},
+  {"name":"CURISTA COFFEE奎士咖啡 市府旗艦店","cat":"咖啡輕食","price":[200,400],"walk":3,"addr":"忠孝東路四段563號1樓","note":"★4.6（1,840則）","ll":[25.04159,121.56405]},
+  {"name":"城南咖啡 手沖專門店","cat":"咖啡輕食","price":[200,400],"walk":3,"addr":"忠孝東路四段553巷6弄14-1號1樓","note":"★4.8（68則）","ll":[25.04219,121.56344]},
+  {"name":"Café&Meal MUJI 統一時代店","cat":"咖啡輕食","price":[200,400],"walk":3,"addr":"","note":"★3.6（1,178則）","ll":[25.04058,121.56548]},
+  {"name":"大戸屋","cat":"日式","price":[200,420],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04077,121.56534]},
+  {"name":"海壽司 Hi Sushi 迴轉壽司","cat":"日式","price":[200,420],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04025,121.56543]},
+  {"name":"京都 餃子の王將","cat":"日式","price":[200,420],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04077,121.56554]},
+  {"name":"大河屋 日式燒肉丼、串燒","cat":"日式","price":[200,420],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04077,121.56524]},
+  {"name":"尾張 鶏三和 親子丼專賣店","cat":"日式","price":[200,420],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04025,121.56524]},
+  {"name":"銅盤嚴選韓式烤肉","cat":"韓式","price":[250,450],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04051,121.56553]},
+  {"name":"TGI Fridays","cat":"西式","price":[250,550],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04038,121.56543]},
+  {"name":"GUGU廚房義式料理","cat":"西式","price":[250,550],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04038,121.56523]},
+  {"name":"鉄火牛排","cat":"西式","price":[250,550],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04024,121.56553]},
+  {"name":"Awesome Burger","cat":"西式","price":[250,550],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04202,121.56417]},
+  {"name":"The 雞 Spot","cat":"西式","price":[250,550],"walk":3,"addr":"基隆路一段190巷7號","note":"價位為類別估計","ll":[25.04201,121.56429]},
+  {"name":"黑毛屋本家","cat":"鍋物","price":[280,600],"walk":3,"addr":"","note":"★4.0（1,253則） · 價位為類別估計","ll":[25.03952,121.56525]},
+  {"name":"Mo-Mo Paradise","cat":"鍋物","price":[280,600],"walk":3,"addr":"","note":"價位為類別估計","ll":[25.04051,121.56534]},
+  {"name":"雨人麵包餐館Rain Man Boulangerie Bistro","cat":"咖啡輕食","price":[400,600],"walk":3,"addr":"","note":"★4.3（593則）","ll":[25.042,121.56299]},
+  {"name":"開飯川食堂","cat":"飯食便當","price":[400,800],"walk":3,"addr":"","note":"★4.2（1,970則）","ll":[25.04062,121.56546]},
+  {"name":"蔦屋書店 WIRED TOKYO","cat":"咖啡輕食","price":[400,800],"walk":3,"addr":"","note":"★3.6（695則）","ll":[25.04078,121.56541]},
+  {"name":"YABI KITCHEN DREAM PLAZA店","cat":"其他","price":[400,800],"walk":3,"addr":"","note":"★4.8（745則）","ll":[25.03959,121.56545]},
+  {"name":"涮乃葉","cat":"鍋物","price":[600,800],"walk":3,"addr":"","note":"★4.2（2,198則）","ll":[25.03688,121.56814]},
+  {"name":"星期五美式餐廳 信義餐廳","cat":"西式","price":[400,1200],"walk":3,"addr":"","note":"★4.5（5,937則）","ll":[25.04073,121.56539]},
+  {"name":"味家魯肉飯","cat":"台式小吃","price":[60,150],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04232,121.56373]},
+  {"name":"米奇早餐店","cat":"台式小吃","price":[60,150],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04221,121.56374]},
+  {"name":"Auntie Anne's","cat":"台式小吃","price":[60,150],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04172,121.56571]},
+  {"name":"八方雲集 信義忠孝店","cat":"麵食","price":[80,150],"walk":4,"addr":"忠孝東路五段49號","note":"連鎖鍋貼水餃，快速平價","ll":[25.04241,121.56359]},
+  {"name":"正德小吃店","cat":"台式小吃","price":[60,200],"walk":4,"addr":"","note":"★4.1（237則）","ll":[25.04234,121.56314]},
+  {"name":"楽 らく Raku（樂晴咖哩）","cat":"日式","price":[60,200],"walk":4,"addr":"","note":"★4.8（244則）","ll":[25.04246,121.56431]},
+  {"name":"劉記客家小吃","cat":"台式小吃","price":[60,200],"walk":4,"addr":"","note":"★4.4（64則）","ll":[25.04207,121.56445]},
+  {"name":"小劉粄條魷魚羹","cat":"麵食","price":[80,180],"walk":4,"addr":"","note":"★4.1（41則） · 價位為類別估計","ll":[25.04206,121.56446]},
+  {"name":"鳳姐快餐便當","cat":"飯食便當","price":[60,200],"walk":4,"addr":"","note":"★4.2（488則）","ll":[25.04269,121.56374]},
+  {"name":"港都旗魚米粉湯","cat":"麵食","price":[60,200],"walk":4,"addr":"","note":"★3.9（151則）","ll":[25.04225,121.56441]},
+  {"name":"安好食-大巨蛋店 早午餐 炒麵","cat":"咖啡輕食","price":[60,200],"walk":4,"addr":"忠孝東路四段553巷16弄4號","note":"★4.8（1,391則）","ll":[25.04266,121.56321]},
+  {"name":"不亂喫早午餐","cat":"咖啡輕食","price":[60,200],"walk":4,"addr":"忠孝東路四段553巷6弄9號","note":"★3.8（32則）","ll":[25.04234,121.56323]},
+  {"name":"彼得好咖啡市府松菸店","cat":"咖啡輕食","price":[60,200],"walk":4,"addr":"基隆路一段188號","note":"★4.2（397則）","ll":[25.04207,121.56476]},
+  {"name":"飽貝 貝果專賣店","cat":"咖啡輕食","price":[60,200],"walk":4,"addr":"忠孝東路四段553巷6弄3號","note":"★4.2（807則）","ll":[25.04231,121.56299]},
+  {"name":"金鼎港式燒臘","cat":"飯食便當","price":[90,180],"walk":4,"addr":"忠孝東路四段553巷6弄9號","note":"價位為類別估計","ll":[25.04233,121.56328]},
+  {"name":"KiKi Restaurant","cat":"其他","price":[100,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.03957,121.56572]},
+  {"name":"本味洋食","cat":"其他","price":[100,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04269,121.5632]},
+  {"name":"宸料理","cat":"其他","price":[100,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04195,121.56523]},
+  {"name":"凱琳手作蛋餅和羋亞瓦特","cat":"其他","price":[100,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04224,121.56387]},
+  {"name":"宋廚菜館","cat":"其他","price":[100,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04179,121.56547]},
+  {"name":"銀兔湯咖哩","cat":"其他","price":[100,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.0425,121.56283]},
+  {"name":"創義麵 Creative Pasta","cat":"西式","price":[150,250],"walk":4,"addr":"忠孝東路四段553巷28號","note":"平價義大利麵，百元有找配菜"},
+  {"name":"大心","cat":"東南亞","price":[140,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04037,121.56578]},
+  {"name":"NARA Thai Cuisine 泰國料理","cat":"東南亞","price":[140,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04059,121.56578]},
+  {"name":"聖加海南雞飯","cat":"東南亞","price":[140,300],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.0405,121.56563]},
+  {"name":"咖啡講市府店","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04213,121.56529]},
+  {"name":"Café X Meal MUJI 無印良品餐廳","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04076,121.56564]},
+  {"name":"吐司股長","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04222,121.56319]},
+  {"name":"11 Cafe","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04256,121.56283]},
+  {"name":"比利時咖啡","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04226,121.56401]},
+  {"name":"Peter Better Cafe","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"基隆路一段188號","note":"價位為類別估計","ll":[25.04206,121.56476]},
+  {"name":"飽貝 bo'bagel - 貝果專賣店","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04228,121.56293]},
+  {"name":"Tea tac toe","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04186,121.5656]},
+  {"name":"Holiqday","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04239,121.56405]},
+  {"name":"PINÈDE 彼內朵｜名古屋手作甜點專門店（市府店）","cat":"咖啡輕食","price":[150,350],"walk":4,"addr":"忠孝東路五段15巷6號","note":"★4.7（1,595則） · 價位為類別估計","ll":[25.04178,121.56547]},
+  {"name":"11日和 │ パスタ","cat":"其他","price":[200,400],"walk":4,"addr":"","note":"★4.5（2,652則）","ll":[25.04254,121.56289]},
+  {"name":"鳥作洋食","cat":"其他","price":[200,400],"walk":4,"addr":"","note":"★4.4（684則）","ll":[25.04261,121.56305]},
+  {"name":"Aum Aum Dosirak 韓定食 信義店","cat":"韓式","price":[200,400],"walk":4,"addr":"","note":"★4.7（507則）","ll":[25.04227,121.56427]},
+  {"name":"丸舢拉麵 市府店","cat":"日式","price":[200,400],"walk":4,"addr":"忠孝東路五段15巷8號","note":"★4.4（413則）","ll":[25.04159,121.56541]},
+  {"name":"湛盧咖啡 市府館","cat":"咖啡輕食","price":[200,400],"walk":4,"addr":"","note":"★4.5（1,108則）","ll":[25.04221,121.56301]},
+  {"name":"吉豚屋","cat":"日式","price":[200,420],"walk":4,"addr":"松高路11號","note":"價位為類別估計","ll":[25.03961,121.56584]},
+  {"name":"韓食拌樂 bibim","cat":"韓式","price":[250,450],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04037,121.56563]},
+  {"name":"韓川館","cat":"韓式","price":[250,450],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04272,121.56379]},
+  {"name":"Pizza Hood","cat":"西式","price":[250,550],"walk":4,"addr":"","note":"價位為類別估計","ll":[25.04229,121.56336]},
+  {"name":"We&Me Cafe好好文化創意","cat":"咖啡輕食","price":[400,600],"walk":4,"addr":"","note":"★4.4（1,006則）","ll":[25.042,121.56471]},
+  {"name":"鼎泰豐","cat":"台式小吃","price":[60,150],"walk":5,"addr":"松高路19號","note":"價位為類別估計","ll":[25.03971,121.56635]},
+  {"name":"新娘子小吃","cat":"台式小吃","price":[60,150],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04145,121.56615]},
+  {"name":"溫州大餛飩","cat":"台式小吃","price":[60,150],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04146,121.56625]},
+  {"name":"珍Q涼麵","cat":"麵食","price":[80,180],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04237,121.56585]},
+  {"name":"UUCAFE 北歐精品咖啡 台北概念店","cat":"咖啡輕食","price":[60,200],"walk":5,"addr":"基隆路一段149號1樓-3","note":"★4.8（123則）","ll":[25.04278,121.56567]},
+  {"name":"楓玥食堂","cat":"飯食便當","price":[60,200],"walk":5,"addr":"基隆路一段147巷8號對面","note":"★4.4（61則）","ll":[25.04237,121.56578]},
+  {"name":"每日飪物 餐盒專賣店","cat":"健康餐盒","price":[60,200],"walk":5,"addr":"","note":"★4.6（73則）","ll":[25.04262,121.56502]},
+  {"name":"新娘子麵館（忠孝店）","cat":"麵食","price":[60,200],"walk":5,"addr":"忠孝東路五段41號","note":"★3.8（929則）","ll":[25.04145,121.56616]},
+  {"name":"哈哈羅55泰式船麵(信義店)","cat":"東南亞","price":[60,200],"walk":5,"addr":"","note":"★4.2（1,133則）","ll":[25.04249,121.56572]},
+  {"name":"上禾池上便當","cat":"飯食便當","price":[90,180],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04135,121.56629]},
+  {"name":"皇品葉記港式燒臘","cat":"飯食便當","price":[90,180],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.0425,121.56546]},
+  {"name":"花丸烏龍麵 統一時代店","cat":"日式","price":[130,250],"walk":5,"addr":"忠孝東路五段8號 統一時代B2","note":"讚岐烏龍麵，天婦羅小菜自選"},
+  {"name":"晶華冠軍牛肉麺坊","cat":"其他","price":[100,300],"walk":5,"addr":"忠孝東路五段微風信義店4F號","note":"價位為類別估計","ll":[25.0404,121.56675]},
+  {"name":"她的餐酒","cat":"其他","price":[100,300],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04316,121.5631]},
+  {"name":"Hërs Biströ","cat":"其他","price":[100,300],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04319,121.56317]},
+  {"name":"Bean U","cat":"其他","price":[100,300],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04318,121.5633]},
+  {"name":"億長御坊-新光Ａ４","cat":"其他","price":[100,300],"walk":5,"addr":"","note":"★3.5（81則） · 價位為類別估計","ll":[25.03969,121.56648]},
+  {"name":"香矛廚泰式料理","cat":"東南亞","price":[140,300],"walk":5,"addr":"松高路19號","note":"價位為類別估計","ll":[25.03951,121.56641]},
+  {"name":"京都餃子的王將 統一時代店","cat":"日式","price":[160,300],"walk":5,"addr":"忠孝東路五段8號 統一時代B2","note":"日式煎餃與中華料理"},
+  {"name":"SAKImoto Bakery","cat":"咖啡輕食","price":[150,350],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04208,121.56563]},
+  {"name":"KEY COFFEE 新光三越台北信義A4店","cat":"咖啡輕食","price":[150,350],"walk":5,"addr":"","note":"★5.0（3則） · 價位為類別估計","ll":[25.03979,121.56674]},
+  {"name":"大心新泰式麵食 統一時代店","cat":"東南亞","price":[230,350],"walk":5,"addr":"忠孝東路五段8號 統一時代B2","note":"★4.3（2,533則） · 酸辣麵人氣品牌，百貨內舒適","ll":[25.04059,121.56547]},
+  {"name":"NSFW Pizza & Coffee","cat":"西式","price":[200,400],"walk":5,"addr":"忠孝東路五段68號","note":"★4.6（319則）","ll":[25.04024,121.56672]},
+  {"name":"Due Italian黃金鹽拉麵（台北新光A4分店）","cat":"日式","price":[200,400],"walk":5,"addr":"松高路19號B2","note":"★4.0（667則）","ll":[25.03965,121.5667]},
+  {"name":"根本在旅行-信義品牌概念店","cat":"咖啡輕食","price":[200,400],"walk":5,"addr":"","note":"★4.6（389則）","ll":[25.04316,121.56319]},
+  {"name":"法朵新馬德里鐵板燒","cat":"日式","price":[200,420],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04256,121.56552]},
+  {"name":"劍持屋","cat":"日式","price":[200,420],"walk":5,"addr":"松高路19號","note":"價位為類別估計","ll":[25.03974,121.56676]},
+  {"name":"五之神製作所","cat":"日式","price":[250,380],"walk":5,"addr":"忠孝東路四段553巷6弄6號","note":"★4.3（5,760則） · 東京新宿名店濃厚蝦湯沾麵，平日中午常排隊","ll":[25.04219,121.56314]},
+  {"name":"稻舍食館 統一時代店","cat":"台式小吃","price":[250,400],"walk":5,"addr":"忠孝東路五段8號 統一時代B2","note":"★4.3（831則） · 台菜飯館，主打好米飯與家常台菜","ll":[25.04047,121.56547]},
+  {"name":"大戶屋 統一時代店","cat":"日式","price":[250,400],"walk":5,"addr":"忠孝東路五段8號 統一時代","note":"連鎖日式定食，餐點現做"},
+  {"name":"北村豆腐家 統一時代店","cat":"韓式","price":[280,400],"walk":5,"addr":"忠孝東路五段8號 統一時代B2","note":"韓式嫩豆腐煲定食","ll":[25.04063,121.56563]},
+  {"name":"拼拼拌 都滿韓家","cat":"韓式","price":[250,450],"walk":5,"addr":"忠孝東路五段31巷18弄2號","note":"價位為類別估計","ll":[25.0416,121.56584]},
+  {"name":"草蔬宴義式蔬食餐廳","cat":"西式","price":[250,550],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04301,121.56284]},
+  {"name":"PapàRoy 義式手作料理","cat":"西式","price":[250,550],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04276,121.56285]},
+  {"name":"Burger Out","cat":"西式","price":[250,550],"walk":5,"addr":"","note":"價位為類別估計","ll":[25.04318,121.56302]},
+  {"name":"靜岡勝政日式豬排 統一時代店","cat":"日式","price":[380,500],"walk":5,"addr":"忠孝東路五段8號 統一時代","note":"炸豬排定食，高麗菜絲飯味噌湯可續","ll":[25.04024,121.56563]},
+  {"name":"養鍋石頭涮涮鍋","cat":"鍋物","price":[400,600],"walk":5,"addr":"忠孝東路四段559巷28號","note":"★4.8（4,328則）","ll":[25.04281,121.56384]},
+  {"name":"御牛殿麵食鍋物-新光三越A4店","cat":"鍋物","price":[400,600],"walk":5,"addr":"松高路19號B2","note":"★4.1（321則）","ll":[25.03965,121.56674]},
+  {"name":"小川鍋物 信義店","cat":"鍋物","price":[400,800],"walk":5,"addr":"","note":"★4.3（450則）","ll":[25.03969,121.56648]},
+  {"name":"捲餅達人","cat":"台式小吃","price":[60,120],"walk":6,"addr":"永吉路30巷104號","note":"現點現擀現煎，招牌烤鴨捲餅"},
+  {"name":"春源祥美食店（30巷咖哩飯）","cat":"飯食便當","price":[80,120],"walk":6,"addr":"永吉路30巷98號","note":"古早味咖哩飯，咖哩豬排麵約100元，藝人愛店"},
+  {"name":"餃子樂","cat":"台式小吃","price":[60,150],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04147,121.56672]},
+  {"name":"鑫吉野烤肉飯 信義永吉店","cat":"飯食便當","price":[80,130],"walk":6,"addr":"永吉路30巷89號","note":"平價烤肉飯便當，份量足"},
+  {"name":"老三豬腳 永吉店","cat":"飯食便當","price":[90,160],"walk":6,"addr":"永吉路30巷92號","note":"豬腳飯滷味老店"},
+  {"name":"丸亀製麺","cat":"麵食","price":[80,180],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.0388,121.56676]},
+  {"name":"麵對麵","cat":"麵食","price":[80,180],"walk":6,"addr":"基隆路一段147巷5弄3號","note":"★4.8（4則） · 價位為類別估計","ll":[25.04265,121.56599]},
+  {"name":"&Heirloom Coffee Studio","cat":"咖啡輕食","price":[60,200],"walk":6,"addr":"忠孝東路五段59號","note":"★4.8（110則）","ll":[25.04139,121.56669]},
+  {"name":"喜憨兒ENJOY 臺北餐廳","cat":"咖啡輕食","price":[60,200],"walk":6,"addr":"","note":"★4.6（307則）","ll":[25.03681,121.56431]},
+  {"name":"Dreamers Coffee Roasters A8店","cat":"咖啡輕食","price":[60,200],"walk":6,"addr":"","note":"★4.3（655則）","ll":[25.03879,121.56673]},
+  {"name":"三商巧福 信義店","cat":"麵食","price":[100,180],"walk":6,"addr":"忠孝東路五段135號2樓","note":"連鎖牛肉麵老品牌"},
+  {"name":"夏威魚 Hawaii Poke Box 信義店","cat":"健康餐盒","price":[130,220],"walk":6,"addr":"永吉路30巷119號","note":"夏威夷Poke丼，低GI清爽無負擔","ll":[25.0431,121.56881]},
+  {"name":"立德餐廳","cat":"其他","price":[100,300],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.03996,121.56007]},
+  {"name":"永心鳳茶","cat":"其他","price":[100,300],"walk":6,"addr":"忠孝東路五段68號","note":"價位為類別估計","ll":[25.04056,121.56701]},
+  {"name":"ENJOY 臺北餐廳","cat":"其他","price":[100,300],"walk":6,"addr":"市府路1號","note":"價位為類別估計","ll":[25.03681,121.56423]},
+  {"name":"市政大樓餐廳","cat":"其他","price":[100,300],"walk":6,"addr":"市府路1號","note":"價位為類別估計","ll":[25.03693,121.56422]},
+  {"name":"喵豆花","cat":"其他","price":[100,300],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04334,121.56348]},
+  {"name":"琺蘭綺瑥朵英式茶餐館","cat":"其他","price":[100,300],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04342,121.5634]},
+  {"name":"激安的食事酒場","cat":"其他","price":[100,300],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04259,121.56597]},
+  {"name":"KONMA","cat":"其他","price":[100,300],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04264,121.56601]},
+  {"name":"饗饗","cat":"其他","price":[100,300],"walk":6,"addr":"忠孝東路五段68號","note":"價位為類別估計","ll":[25.04051,121.56723]},
+  {"name":"Feeling","cat":"其他","price":[100,300],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.0427,121.56563]},
+  {"name":"雲鼎阿二麻辣食堂 永吉店","cat":"鍋物","price":[150,280],"walk":6,"addr":"永吉路30巷87號","note":"個人麻辣小鍋，白飯滷味加點"},
+  {"name":"瓦城 Thai Town","cat":"東南亞","price":[140,300],"walk":6,"addr":"忠孝東路五段68號","note":"價位為類別估計","ll":[25.04053,121.5672]},
+  {"name":"Nathalie Lete娜塔莉台北店","cat":"咖啡輕食","price":[150,350],"walk":6,"addr":"基隆路一段147巷5弄5號","note":"價位為類別估計","ll":[25.04278,121.56607]},
+  {"name":"午葉","cat":"咖啡輕食","price":[150,350],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04135,121.56671]},
+  {"name":"Tropo Cafe","cat":"咖啡輕食","price":[150,350],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04333,121.56329]},
+  {"name":"noco Coffee","cat":"咖啡輕食","price":[150,350],"walk":6,"addr":"24樓, No. 68號忠孝東路五段","note":"★3.8（8則） · 價位為類別估計","ll":[25.04048,121.56702]},
+  {"name":"Cozzi Café","cat":"咖啡輕食","price":[200,400],"walk":6,"addr":"忠孝東路四段553巷42-1號1樓","note":"★4.6（662則）","ll":[25.0398,121.56747]},
+  {"name":"CAMA COFFEE ROASTERS 豆留文青","cat":"咖啡輕食","price":[200,400],"walk":6,"addr":"光復南路133號","note":"★4.1（1,150則）","ll":[25.04299,121.56166]},
+  {"name":"屋莎洋食鬆餅屋","cat":"日式","price":[200,420],"walk":6,"addr":"忠孝東路四段553巷28號","note":"價位為類別估計","ll":[25.04352,121.56291]},
+  {"name":"犇鐵板燒","cat":"日式","price":[200,420],"walk":6,"addr":"忠孝東路五段68號","note":"價位為類別估計","ll":[25.04042,121.56693]},
+  {"name":"日本橋海鮮丼","cat":"日式","price":[200,420],"walk":6,"addr":"忠孝東路五段68號","note":"價位為類別估計","ll":[25.04069,121.567]},
+  {"name":"三井日式料理","cat":"日式","price":[200,420],"walk":6,"addr":"松智路1號","note":"價位為類別估計","ll":[25.03847,121.56623]},
+  {"name":"韓斤麻浦","cat":"韓式","price":[250,450],"walk":6,"addr":"忠孝東路五段68號","note":"價位為類別估計","ll":[25.04042,121.567]},
+  {"name":"LeTAO","cat":"西式","price":[250,550],"walk":6,"addr":"忠孝東路四段553巷30號","note":"價位為類別估計","ll":[25.04362,121.56294]},
+  {"name":"iPasta","cat":"西式","price":[250,550],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.03949,121.56679]},
+  {"name":"莫爾頓牛排館","cat":"西式","price":[250,550],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04071,121.56683]},
+  {"name":"Skrabur","cat":"西式","price":[250,550],"walk":6,"addr":"","note":"價位為類別估計","ll":[25.04278,121.56567]},
+  {"name":"NUMÉRO QUATRE","cat":"咖啡輕食","price":[400,600],"walk":6,"addr":"忠孝東路四段553巷22弄5號","note":"★4.2（501則）","ll":[25.04336,121.5631]},
+  {"name":"三分半海鮮鍋物","cat":"鍋物","price":[400,600],"walk":6,"addr":"","note":"★4.9（767則）","ll":[25.0428,121.56615]},
+  {"name":"員外佬麻辣火鍋-信義/市府站熱門鍋物|特色鍋物|人氣鍋物|必吃鴛鴦鍋|必吃火鍋|鴛鴦火鍋|在地推薦火鍋|麻辣火鍋","cat":"鍋物","price":[800,1000],"walk":6,"addr":"基隆路一段147巷15號","note":"★5.0（114則）","ll":[25.0425,121.56649]},
+  {"name":"岩漿漢方麻辣火鍋-台北微風信義店","cat":"鍋物","price":[600,1400],"walk":6,"addr":"","note":"★4.9（1,666則）","ll":[25.04068,121.56696]},
+  {"name":"梁記涼麵","cat":"麵食","price":[45,90],"walk":7,"addr":"永吉路30巷150號","note":"★4.3（640則） · 30年老牌涼麵45元起，清晨開賣、賣完為止","ll":[25.04247,121.5686]},
+  {"name":"巨林美而美","cat":"台式小吃","price":[60,150],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.03702,121.5611]},
+  {"name":"夏滇泰特色料理","cat":"台式小吃","price":[60,150],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04408,121.56319]},
+  {"name":"すき家","cat":"台式小吃","price":[60,150],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04124,121.5677]},
+  {"name":"正忠排骨飯 永吉店","cat":"飯食便當","price":[90,140],"walk":7,"addr":"永吉路30巷125號","note":"南部人氣排骨飯便當","ll":[25.04282,121.56882]},
+  {"name":"烤食煮盒 永吉店","cat":"健康餐盒","price":[100,150],"walk":7,"addr":"永吉路30巷157弄9號","note":"★4.6（1,860則） · 日式烤物雙主餐便當，健康不油膩","ll":[25.04241,121.56914]},
+  {"name":"上海市牛肉麵","cat":"麵食","price":[80,180],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04172,121.5674]},
+  {"name":"津津韓式小吃진진분식(新光三越A8)","cat":"韓式","price":[60,200],"walk":7,"addr":"松高路12號號 B2","note":"★2.3（139則）","ll":[25.03804,121.56668]},
+  {"name":"滷susu 滷香麵舖 A8店","cat":"其他","price":[60,200],"walk":7,"addr":"松高路12號","note":"★3.9（127則）","ll":[25.03822,121.56679]},
+  {"name":"Chaojinoodles艸祭製麵所Gift&tea新光三越A8","cat":"麵食","price":[80,180],"walk":7,"addr":"松高路12號號 B2","note":"★4.8（8則） · 價位為類別估計","ll":[25.03804,121.56668]},
+  {"name":"朝美料 Morning Cuisine","cat":"台式小吃","price":[60,200],"walk":7,"addr":"忠孝東路五段71巷28 號","note":"★4.5（257則）","ll":[25.04246,121.56729]},
+  {"name":"微笑路早餐咖啡館","cat":"台式小吃","price":[60,200],"walk":7,"addr":"","note":"★4.2（397則）","ll":[25.04234,121.56708]},
+  {"name":"馬克叔叔早午餐","cat":"咖啡輕食","price":[60,200],"walk":7,"addr":"基隆路一段147巷5弄46號","note":"★3.7（112則）","ll":[25.0429,121.56638]},
+  {"name":"烤師父烤肉飯","cat":"飯食便當","price":[100,160],"walk":7,"addr":"永吉路30巷151弄2之1號","note":"現烤肉排便當人氣店"},
+  {"name":"如意健康素食坊","cat":"健康餐盒","price":[130,260],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.03658,121.56146]},
+  {"name":"gonna+","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04351,121.56162]},
+  {"name":"台北牛乳大王","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04125,121.56758]},
+  {"name":"北平度一盧","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.03724,121.56113]},
+  {"name":"三井cuisine M","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.0384,121.56691]},
+  {"name":"MAiSEN 邁泉","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.03707,121.56583]},
+  {"name":"蝦Bar活蝦料理","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.03704,121.56148]},
+  {"name":"家咖哩","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04411,121.56308]},
+  {"name":"七三茶堂","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04415,121.56351]},
+  {"name":"都一處 仁愛店","cat":"其他","price":[100,300],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.03724,121.56104]},
+  {"name":"馬友友印度廚房","cat":"東南亞","price":[140,300],"walk":7,"addr":"基隆路一段350-5號","note":"價位為類別估計","ll":[25.037,121.56162]},
+  {"name":"食米","cat":"其他","price":[150,300],"walk":7,"addr":"永吉路30巷101弄14號","note":"四川空運食材川味小館，週一公休、只收現金"},
+  {"name":"瑞記海南雞飯","cat":"東南亞","price":[180,280],"walk":7,"addr":"永吉路30巷145號","note":"招牌海南雞飯180元","ll":[25.04262,121.56885]},
+  {"name":"牛一牛厚切牛排 永吉店","cat":"西式","price":[180,300],"walk":7,"addr":"永吉路30巷157弄12號","note":"平價厚切牛排","ll":[25.04223,121.56922]},
+  {"name":"TankQ Cafe & Bar","cat":"咖啡輕食","price":[150,350],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04415,121.5634]},
+  {"name":"鈷藍咖啡","cat":"咖啡輕食","price":[150,350],"walk":7,"addr":"仁愛路四段502之1號","note":"價位為類別估計","ll":[25.03725,121.56077]},
+  {"name":"客美多咖啡","cat":"咖啡輕食","price":[150,350],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04125,121.56778]},
+  {"name":"Snob Café","cat":"咖啡輕食","price":[200,400],"walk":7,"addr":"基隆路一段147巷21號","note":"★4.4（364則）","ll":[25.04249,121.56669]},
+  {"name":"小青苑 Cyan Cafe","cat":"咖啡輕食","price":[200,400],"walk":7,"addr":"基隆路一段147巷29號","note":"★4.6（316則）","ll":[25.04244,121.56696]},
+  {"name":"蘭芳麵食館.滷味舖-新光三越A8店|花椒麵、花椒鴨滷、四川花椒辣油","cat":"麵食","price":[200,400],"walk":7,"addr":"松高路12號號 B2","note":"★3.9（151則）","ll":[25.03804,121.56668]},
+  {"name":"總裁牛肉麵-遠百A13門市","cat":"麵食","price":[200,400],"walk":7,"addr":"松仁路58號4 樓","note":"★4.0（1,063則）","ll":[25.03937,121.56786]},
+  {"name":"福勝亭","cat":"日式","price":[200,420],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04129,121.56769]},
+  {"name":"鮨味亭日本料理","cat":"日式","price":[200,420],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04208,121.56724]},
+  {"name":"藏壽司","cat":"日式","price":[200,420],"walk":7,"addr":"松高路16號","note":"價位為類別估計","ll":[25.03857,121.56739]},
+  {"name":"蔬食餐酒館","cat":"西式","price":[250,550],"walk":7,"addr":"忠孝東路四段553巷46弄11號","note":"價位為類別估計","ll":[25.04441,121.56341]},
+  {"name":"艾朋牛排餐酒館","cat":"西式","price":[250,550],"walk":7,"addr":"","note":"價位為類別估計","ll":[25.04124,121.56786]},
+  {"name":"Texas Road House","cat":"西式","price":[250,550],"walk":7,"addr":"松高路16號","note":"價位為類別估計","ll":[25.03895,121.56749]},
+  {"name":"光一一個時間 ( 生態池旁綠色建築 )","cat":"咖啡輕食","price":[400,600],"walk":7,"addr":"","note":"★4.5（624則）","ll":[25.04363,121.5616]},
+  {"name":"鮮牧火鍋 市府店","cat":"鍋物","price":[400,600],"walk":7,"addr":"基隆路一段147巷19號","note":"★4.7（510則）","ll":[25.0425,121.56662]},
+  {"name":"品湯白色麻辣鍋 信義市府店","cat":"鍋物","price":[400,600],"walk":7,"addr":"","note":"★4.6（770則）","ll":[25.04244,121.56682]},
+  {"name":"饗泰多泰式風格餐廳 微風松高店","cat":"東南亞","price":[600,800],"walk":7,"addr":"","note":"★4.5（2,422則）","ll":[25.03871,121.56729]},
+  {"name":"四行倉庫｜台北信義","cat":"其他","price":[800,1000],"walk":7,"addr":"","note":"★3.7（74則）","ll":[25.03937,121.56786]},
+  {"name":"彭記蚵仔麵線脆皮臭豆腐","cat":"台式小吃","price":[50,110],"walk":8,"addr":"永吉路30巷177弄1號","note":"銅板價蚵仔麵線配脆皮臭豆腐"},
+  {"name":"小樂天餃子館","cat":"台式小吃","price":[60,150],"walk":8,"addr":"忠孝東路五段151號","note":"價位為類別估計","ll":[25.04125,121.56832]},
+  {"name":"欣葉.台菜","cat":"台式小吃","price":[60,150],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03704,121.56682]},
+  {"name":"享‧香檳海鮮餐酒館 ChamBistro Diner and Bar","cat":"台式小吃","price":[60,150],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03695,121.56686]},
+  {"name":"玖龍冰室","cat":"台式小吃","price":[60,150],"walk":8,"addr":"5號 忠孝東路四段553巷52弄","note":"★4.4（5,197則） · 價位為類別估計","ll":[25.04469,121.56284]},
+  {"name":"龍涎居","cat":"台式小吃","price":[60,150],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.04242,121.56802]},
+  {"name":"松山高中早餐部","cat":"台式小吃","price":[60,150],"walk":8,"addr":"松山高中","note":"價位為類別估計","ll":[25.04452,121.56541]},
+  {"name":"榮麵館","cat":"麵食","price":[80,180],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.04226,121.56812]},
+  {"name":"松山高中麵食部","cat":"麵食","price":[80,180],"walk":8,"addr":"松山高中","note":"價位為類別估計","ll":[25.04452,121.56534]},
+  {"name":"阿芬小吃","cat":"麵食","price":[60,200],"walk":8,"addr":"","note":"★4.3（334則）","ll":[25.03688,121.56059]},
+  {"name":"芝香雞肉飯 涼麵","cat":"飯食便當","price":[60,200],"walk":8,"addr":"","note":"★4.0（2,286則）","ll":[25.04123,121.56805]},
+  {"name":"燒石鼎石頭小火鍋-信義店","cat":"鍋物","price":[60,200],"walk":8,"addr":"","note":"★4.8（1,229則）","ll":[25.04316,121.567]},
+  {"name":"58食堂","cat":"飯食便當","price":[90,180],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03615,121.56123]},
+  {"name":"滇味廚房 永吉店","cat":"麵食","price":[120,250],"walk":8,"addr":"永吉路30巷178弄2號","note":"★4.0（1,397則） · 老牌雲南料理，過橋米線與椒麻雞經典","ll":[25.0414,121.56863]},
+  {"name":"紅豆食府","cat":"其他","price":[100,300],"walk":8,"addr":"松壽路9號","note":"價位為類別估計","ll":[25.03688,121.56674]},
+  {"name":"ChocoArt巧克光廊","cat":"其他","price":[100,300],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03851,121.56816]},
+  {"name":"初魚料亭","cat":"其他","price":[100,300],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03713,121.56672]},
+  {"name":"TOKO INDO BAGOES","cat":"其他","price":[100,300],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03651,121.56093]},
+  {"name":"威爾家","cat":"其他","price":[100,300],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03644,121.5614]},
+  {"name":"誠記越南麵食館 永吉店","cat":"東南亞","price":[150,250],"walk":8,"addr":"永吉路30巷158弄7號","note":"老牌越南河粉、法國麵包","ll":[25.04242,121.56841]},
+  {"name":"PappaRich","cat":"其他","price":[100,300],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03698,121.56674]},
+  {"name":"Bouillon 布雍家","cat":"其他","price":[100,300],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.04274,121.56729]},
+  {"name":"GB鮮釀餐廳","cat":"其他","price":[100,300],"walk":8,"addr":"松壽路11號","note":"價位為類別估計","ll":[25.03718,121.56717]},
+  {"name":"武鼎越豐越南麵食館","cat":"東南亞","price":[130,280],"walk":8,"addr":"永吉路30巷167弄2號","note":"★4.2（3,683則） · Google近3000則高評價，一開門就客滿","ll":[25.04182,121.56884]},
+  {"name":"cama café現烘咖啡","cat":"咖啡輕食","price":[150,350],"walk":8,"addr":"松仁路32號","note":"價位為類別估計","ll":[25.03844,121.56787]},
+  {"name":"菓源","cat":"咖啡輕食","price":[150,350],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.0446,121.56296]},
+  {"name":"福里安花神","cat":"咖啡輕食","price":[150,350],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03707,121.56682]},
+  {"name":"Outing Cafe & Bar","cat":"咖啡輕食","price":[150,350],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03725,121.55956]},
+  {"name":"HWC黑沃咖啡-台北市府店","cat":"咖啡輕食","price":[150,350],"walk":8,"addr":"忠孝東路五段71巷38號","note":"價位為類別估計","ll":[25.04289,121.56734]},
+  {"name":"Wanna Eat","cat":"咖啡輕食","price":[150,350],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.04242,121.56779]},
+  {"name":"米嵐義式便當 Italian Bento","cat":"西式","price":[200,400],"walk":8,"addr":"","note":"★4.9（69則）","ll":[25.03621,121.56125]},
+  {"name":"Lazy Pasta 慵懶義式廚房信義市府店","cat":"西式","price":[200,400],"walk":8,"addr":"","note":"★4.6（2,045則）","ll":[25.04266,121.5673]},
+  {"name":"Drip & Dough Cafe and Bakery","cat":"咖啡輕食","price":[200,400],"walk":8,"addr":"No. 38, 松仁路","note":"★4.3（47則）","ll":[25.0382,121.56806]},
+  {"name":"eslite café 松菸店","cat":"咖啡輕食","price":[200,400],"walk":8,"addr":"","note":"★4.7（1,058則）","ll":[25.04456,121.56135]},
+  {"name":"兩班家","cat":"韓式","price":[250,450],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.03702,121.56669]},
+  {"name":"摩斯漢堡","cat":"西式","price":[250,550],"walk":8,"addr":"忠孝東路五段155-5號","note":"價位為類別估計","ll":[25.04121,121.56839]},
+  {"name":"福嗑","cat":"西式","price":[250,550],"walk":8,"addr":"","note":"價位為類別估計","ll":[25.04152,121.5685]},
+  {"name":"M One Cafe A11館","cat":"咖啡輕食","price":[400,600],"walk":8,"addr":"松壽路11號","note":"★4.5（2,994則）","ll":[25.0372,121.56708]},
+  {"name":"Place 享。信義 - 菸品與咖啡專門店","cat":"咖啡輕食","price":[240,800],"walk":8,"addr":"忠孝東路五段153號","note":"★5.0（288則）","ll":[25.04122,121.5683]},
+  {"name":"周家豆腐捲","cat":"台式小吃","price":[60,150],"walk":9,"addr":"光復南路419巷106號","note":"價位為類別估計","ll":[25.03641,121.56016]},
+  {"name":"錦記港式美食","cat":"台式小吃","price":[60,150],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.036,121.56096]},
+  {"name":"大鼎傳統美食","cat":"台式小吃","price":[60,150],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04121,121.56891]},
+  {"name":"南北舍小館","cat":"台式小吃","price":[60,150],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04243,121.56812]},
+  {"name":"梁社漢排骨","cat":"台式小吃","price":[60,150],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04221,121.5688]},
+  {"name":"好味麵食館","cat":"麵食","price":[80,180],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03609,121.56077]},
+  {"name":"金鳳手工麵疙瘩","cat":"麵食","price":[60,200],"walk":9,"addr":"基隆路一段350-47號","note":"★4.1（257則）","ll":[25.03604,121.56092]},
+  {"name":"胡饕米粉湯","cat":"麵食","price":[60,200],"walk":9,"addr":"","note":"★4.1（2,004則）","ll":[25.04242,121.56856]},
+  {"name":"康圓麵疙瘩","cat":"麵食","price":[80,180],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04201,121.56881]},
+  {"name":"鼎越豐麵食館","cat":"麵食","price":[80,180],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04185,121.5688]},
+  {"name":"吉之丼（永吉店）","cat":"日式","price":[60,200],"walk":9,"addr":"永吉路30巷5號","note":"★4.6（91則）","ll":[25.04169,121.5688]},
+  {"name":"見麵吃飯","cat":"其他","price":[60,200],"walk":9,"addr":"基隆路一段","note":"★4.5（94則）","ll":[25.03609,121.56084]},
+  {"name":"原鄉緣","cat":"麵食","price":[60,200],"walk":9,"addr":"","note":"★4.2（395則）","ll":[25.03655,121.56019]},
+  {"name":"阿弟仔大腸麵線","cat":"麵食","price":[60,200],"walk":9,"addr":"","note":"★4.4（205則）","ll":[25.04222,121.56859]},
+  {"name":"「松」蚵仔麵線","cat":"麵食","price":[60,200],"walk":9,"addr":"光復南路419巷142號","note":"★4.1（88則）","ll":[25.0364,121.56029]},
+  {"name":"劉媽媽炒手大滷","cat":"麵食","price":[60,200],"walk":9,"addr":"松仁路58號B3樓","note":"★1.7（89則）","ll":[25.03687,121.56776]},
+  {"name":"皇泰泰 泰式船麵","cat":"東南亞","price":[60,200],"walk":9,"addr":"","note":"★4.4（610則）","ll":[25.04219,121.56859]},
+  {"name":"好口味 雲吞料理｜手工水餃 小卷米粉 麵疙瘩 海鮮麵","cat":"麵食","price":[60,200],"walk":9,"addr":"基隆路一段350-47號","note":"★4.4（22則）","ll":[25.03607,121.56089]},
+  {"name":"Kenangan Coffee 凱娜克咖啡 ♥ 新光A11時光","cat":"咖啡輕食","price":[60,200],"walk":9,"addr":"No.11, Songshou Rd 2F022","note":"★4.4（253則）","ll":[25.03634,121.56696]},
+  {"name":"劉媽媽快餐店","cat":"飯食便當","price":[90,180],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.0425,121.56866]},
+  {"name":"極品光復素食包子","cat":"健康餐盒","price":[130,260],"walk":9,"addr":"光復南路419巷","note":"價位為類別估計","ll":[25.03651,121.55957]},
+  {"name":"新村站著吃烤肉","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04125,121.56857]},
+  {"name":"日常時光","cat":"其他","price":[100,300],"walk":9,"addr":"忠孝東路五段177號","note":"價位為類別估計","ll":[25.04119,121.569]},
+  {"name":"迎賓廊","cat":"其他","price":[100,300],"walk":9,"addr":"松壽路2號","note":"價位為類別估計","ll":[25.03513,121.56266]},
+  {"name":"凱悅廳","cat":"其他","price":[100,300],"walk":9,"addr":"松壽路2號","note":"價位為類別估計","ll":[25.03538,121.56302]},
+  {"name":"茶苑","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03526,121.56298]},
+  {"name":"Cheers 歡飲廊","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03517,121.56236]},
+  {"name":"Ziga Zaga","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03528,121.56231]},
+  {"name":"寶艾西餐廳","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03539,121.56229]},
+  {"name":"寒舍食譜","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03771,121.56784]},
+  {"name":"北緯二十五","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.0378,121.56817]},
+  {"name":"Honey Secret 甜蜜密 - 台北信義店","cat":"其他","price":[100,300],"walk":9,"addr":"松壽路12號","note":"價位為類別估計","ll":[25.03561,121.56596]},
+  {"name":"初魚鐵板料亭","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03659,121.56672]},
+  {"name":"蒸籠坊","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03612,121.5607]},
+  {"name":"食分之一餐館","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03726,121.55942]},
+  {"name":"大胃鍋","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04243,121.56825]},
+  {"name":"傷心酸辣粉","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04238,121.56866]},
+  {"name":"鴨肉謝","cat":"其他","price":[100,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04189,121.56863]},
+  {"name":"Nataraj Indian Cuisine","cat":"東南亞","price":[140,300],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04455,121.56674]},
+  {"name":"凱菲屋Cafe","cat":"咖啡輕食","price":[150,350],"walk":9,"addr":"松壽路2號","note":"價位為類別估計","ll":[25.03508,121.56276]},
+  {"name":"樹樂集","cat":"咖啡輕食","price":[150,350],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04242,121.56817]},
+  {"name":"享咖啡","cat":"咖啡輕食","price":[150,350],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04242,121.56831]},
+  {"name":"威爾貝克手烘咖啡吧","cat":"咖啡輕食","price":[150,350],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04216,121.56865]},
+  {"name":"FLASH COFFEE","cat":"咖啡輕食","price":[150,350],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04163,121.56863]},
+  {"name":"Ten thousand","cat":"咖啡輕食","price":[150,350],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.04467,121.56136]},
+  {"name":"小小麥 信義新光A11","cat":"其他","price":[200,400],"walk":9,"addr":"","note":"★4.6（2,129則）","ll":[25.03644,121.56743]},
+  {"name":"大師兄銷魂麵舖-信義店(新光三越A11，B2)","cat":"麵食","price":[200,400],"walk":9,"addr":"松壽路11號","note":"★4.3（2,666則）","ll":[25.03662,121.56726]},
+  {"name":"麵屋一登","cat":"日式","price":[200,400],"walk":9,"addr":"松壽路11號B2","note":"★4.3（4則）","ll":[25.03668,121.56752]},
+  {"name":"Arthere Café 上樓看看咖啡","cat":"咖啡輕食","price":[200,400],"walk":9,"addr":"","note":"★4.2（1,942則）","ll":[25.04146,121.56897]},
+  {"name":"食徒頂即鍋(永吉店)","cat":"鍋物","price":[200,400],"walk":9,"addr":"永吉路30巷158弄9號1樓","note":"★4.6（417則）","ll":[25.04249,121.56833]},
+  {"name":"彩日本料理","cat":"日式","price":[200,420],"walk":9,"addr":"","note":"價位為類別估計","ll":[25.03515,121.56288]},
+  {"name":"LEAVES Cafe 午葉信義","cat":"咖啡輕食","price":[400,600],"walk":9,"addr":"永吉路30巷167弄3號","note":"★4.1（1,114則）","ll":[25.04203,121.56889]},
+  {"name":"雅苑港式點心","cat":"台式小吃","price":[60,150],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.0419,121.55746]},
+  {"name":"雲錦中餐廳","cat":"台式小吃","price":[60,150],"walk":10,"addr":"松壽路2號","note":"價位為類別估計","ll":[25.03506,121.56262]},
+  {"name":"漂亮廣式海鮮餐廳","cat":"台式小吃","price":[60,150],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03507,121.56247]},
+  {"name":"兄妹早餐","cat":"台式小吃","price":[60,150],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04303,121.56882]},
+  {"name":"百家班基隆路店","cat":"台式小吃","price":[60,150],"walk":10,"addr":"基隆路一段126號","note":"價位為類別估計","ll":[25.04518,121.56662]},
+  {"name":"存香牛肉麵","cat":"麵食","price":[60,200],"walk":10,"addr":"基隆路一段370號","note":"★4.2（68則）","ll":[25.03515,121.56061]},
+  {"name":"江家牛肉麵","cat":"麵食","price":[60,200],"walk":10,"addr":"光復南路240巷1號","note":"★3.8（2,939則）","ll":[25.0404,121.55743]},
+  {"name":"築田便當","cat":"飯食便當","price":[60,200],"walk":10,"addr":"","note":"★3.6（322則）","ll":[25.04122,121.56943]},
+  {"name":"雙和盛麵餃館","cat":"台式小吃","price":[60,200],"walk":10,"addr":"","note":"★4.0（611則）","ll":[25.04239,121.5689]},
+  {"name":"四川涼麵","cat":"麵食","price":[80,180],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04224,121.56895]},
+  {"name":"牛肉麵 雞湯","cat":"麵食","price":[80,180],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.0412,121.56932]},
+  {"name":"盧家小吃店","cat":"台式小吃","price":[60,200],"walk":10,"addr":"光復南路419巷78號","note":"★4.3（99則）","ll":[25.03643,121.55904]},
+  {"name":"傳說食堂","cat":"飯食便當","price":[90,180],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04237,121.56896]},
+  {"name":"有饌便當","cat":"飯食便當","price":[90,180],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04327,121.56868]},
+  {"name":"饗食天堂","cat":"其他","price":[100,300],"walk":10,"addr":"松壽路12號","note":"價位為類別估計","ll":[25.03535,121.56622]},
+  {"name":"海底撈","cat":"其他","price":[100,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03525,121.56605]},
+  {"name":"撈王","cat":"其他","price":[100,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03525,121.56603]},
+  {"name":"叁食","cat":"其他","price":[100,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03732,121.55857]},
+  {"name":"一品活蝦","cat":"其他","price":[100,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04119,121.56948]},
+  {"name":"Lady媽媽廚房","cat":"其他","price":[100,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04237,121.56929]},
+  {"name":"站食可以","cat":"其他","price":[100,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04223,121.5693]},
+  {"name":"傲翔中泰料理","cat":"其他","price":[100,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04223,121.56913]},
+  {"name":"烤師傅","cat":"其他","price":[100,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04253,121.5688]},
+  {"name":"Bangkokjam泰過熱","cat":"東南亞","price":[140,300],"walk":10,"addr":"松壽路12號","note":"價位為類別估計","ll":[25.03527,121.56616]},
+  {"name":"饗印印度料理","cat":"東南亞","price":[140,300],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03534,121.56063]},
+  {"name":"星巴克","cat":"咖啡輕食","price":[150,350],"walk":10,"addr":"松仁路7號","note":"價位為類別估計","ll":[25.03802,121.56901]},
+  {"name":"豆舖子","cat":"咖啡輕食","price":[150,350],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.0392,121.55741]},
+  {"name":"HAPI Cafe","cat":"咖啡輕食","price":[150,350],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03893,121.55741]},
+  {"name":"客多美咖啡","cat":"咖啡輕食","price":[150,350],"walk":10,"addr":"光復南路286號","note":"價位為類別估計","ll":[25.03955,121.55742]},
+  {"name":"布丁狗餐廳","cat":"咖啡輕食","price":[150,350],"walk":10,"addr":"松智路","note":"價位為類別估計","ll":[25.03531,121.56594]},
+  {"name":"無印良品咖啡","cat":"咖啡輕食","price":[150,350],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03609,121.56726]},
+  {"name":"開燈咖啡","cat":"咖啡輕食","price":[150,350],"walk":10,"addr":"光復南路419巷76號","note":"價位為類別估計","ll":[25.0364,121.55888]},
+  {"name":"BOBOLU","cat":"咖啡輕食","price":[150,350],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04255,121.56887]},
+  {"name":"孫麵店Sun Bros Noodles","cat":"麵食","price":[200,400],"walk":10,"addr":"松壽路11號B2","note":"★3.6（225則）","ll":[25.03607,121.56741]},
+  {"name":"牛肉麵．雞湯 新信義店","cat":"麵食","price":[200,400],"walk":10,"addr":"","note":"★4.0（660則）","ll":[25.04122,121.56934]},
+  {"name":"DOHTONBORI道頓堀 御好燒","cat":"日式","price":[200,420],"walk":10,"addr":"松壽路12號","note":"價位為類別估計","ll":[25.03527,121.56621]},
+  {"name":"一蘭拉麵","cat":"日式","price":[200,420],"walk":10,"addr":"松壽路11號","note":"價位為類別估計","ll":[25.03608,121.5671]},
+  {"name":"韓江烤肉","cat":"韓式","price":[250,450],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04015,121.55727]},
+  {"name":"偷飯賊 밥도둑","cat":"韓式","price":[250,450],"walk":10,"addr":"松仁路58號","note":"價位為類別估計","ll":[25.0364,121.56782]},
+  {"name":"麥當勞","cat":"西式","price":[250,550],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03942,121.55743]},
+  {"name":"Belini Pasta Pasta1","cat":"西式","price":[250,550],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03562,121.56704]},
+  {"name":"Vapiano","cat":"西式","price":[250,550],"walk":10,"addr":"松壽路12號","note":"價位為類別估計","ll":[25.0354,121.56604]},
+  {"name":"蘇阿姨披薩屋","cat":"西式","price":[250,550],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03913,121.55741]},
+  {"name":"必勝客","cat":"西式","price":[250,550],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.04156,121.55746]},
+  {"name":"Hooters","cat":"西式","price":[250,550],"walk":10,"addr":"","note":"價位為類別估計","ll":[25.03696,121.56799]},
+  {"name":"MiaCucina 信義店","cat":"西式","price":[250,550],"walk":10,"addr":"松壽路11號","note":"價位為類別估計","ll":[25.03614,121.56711]},
+  {"name":"鼎楓寶島火鍋 信義Att店","cat":"鍋物","price":[400,600],"walk":10,"addr":"松壽路12號5 樓","note":"★4.9（1,420則）","ll":[25.03526,121.56606]},
+  {"name":"李蝦記爆蝦火鍋 Shrimp at Lee's｜ATT 4 FUN 店-信義麻辣火鍋|串串火鍋|涮涮鍋|必吃火鍋|聚會餐廳|美食推薦|慶生餐廳|CP值餐廳","cat":"鍋物","price":[400,600],"walk":10,"addr":"松壽路12號5 樓","note":"★4.8（1,936則）","ll":[25.03526,121.56606]},
+  {"name":"新馬辣經典麻辣鍋-信義遠百店Plus+","cat":"鍋物","price":[800,1000],"walk":10,"addr":"","note":"★4.4（3,021則）","ll":[25.03676,121.56799]},
+  {"name":"青花驕麻辣鍋 台北新光A11店","cat":"鍋物","price":[600,1400],"walk":10,"addr":"松壽路11號5樓","note":"★4.9（1,378則）","ll":[25.03605,121.56724]}
+];
+/* DATA-END */
+
+const CAT_EMOJI = {
+  "麵食":"🍜","飯食便當":"🍱","日式":"🍣","韓式":"🥘","東南亞":"🍛",
+  "西式":"🍔","台式小吃":"🥟","健康餐盒":"🥗","鍋物":"🍲","咖啡輕食":"☕","其他":"🍽️"
+};
+const CAT_ORDER = Object.keys(CAT_EMOJI);
+const PALETTE = ["#FFD6A5","#BDE3C9","#FDF3B6","#B8DDF5","#F5C6C6","#CBD9A8","#F5D9EF","#B9D8D2","#F3C088","#DED1F2"];
+const TEXT_ON_WHEEL = "#3A3226";
+
+/* ══════════ 狀態 ══════════ */
+const todayKey = new Date().toISOString().slice(0, 10);
+let store = {};
+try { store = JSON.parse(localStorage.getItem("lunch-wheel-v2") || "{}"); } catch (e) {}
+const allCatsInData = [...new Set(RESTAURANTS.map(r => r.cat))]
+  .sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
+
+const state = {
+  budget: store.budget ?? 1000,
+  walk: store.walk ?? 10,
+  cats: new Set(Array.isArray(store.cats) ? store.cats.filter(c => allCatsInData.includes(c)) : allCatsInData),
+  skipped: new Set(store.skipDate === todayKey && Array.isArray(store.skipped) ? store.skipped : []),
+  rot: -Math.PI / 2,
+  spinning: false
+};
+if (state.cats.size === 0 && !Array.isArray(store.cats)) allCatsInData.forEach(c => state.cats.add(c));
+
+function persist() {
+  try {
+    localStorage.setItem("lunch-wheel-v2", JSON.stringify({
+      budget: state.budget, walk: state.walk, cats: [...state.cats],
+      skipped: [...state.skipped], skipDate: todayKey
+    }));
+  } catch (e) {}
+}
+
+const avg = r => (r.price[0] + r.price[1]) / 2;
+const eligible = () => RESTAURANTS.filter(r =>
+  avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat) && !state.skipped.has(r.name)
+);
+
+/* ══════════ DOM ══════════ */
+const $ = id => document.getElementById(id);
+const canvas = $("wheel"), ctx = canvas.getContext("2d");
+const S = 1000, CX = S / 2, R = S / 2 - 14;
+
+/* ══════════ 轉輪繪製 ══════════ */
+function segColor(i, n) {
+  if (n > 1 && i === n - 1 && i % PALETTE.length === 0) return PALETTE[3];
+  return PALETTE[i % PALETTE.length];
+}
+function drawWheel(list) {
+  ctx.clearRect(0, 0, S, S);
+  const n = list.length;
+  if (n === 0) return;
+  const seg = 2 * Math.PI / n;
+  const fs = n <= 10 ? 40 : n <= 18 ? 33 : n <= 28 ? 28 : 24;
+  const maxChars = n <= 10 ? 9 : n <= 18 ? 8 : n <= 28 ? 7 : 6;
+
+  for (let i = 0; i < n; i++) {
+    const a0 = state.rot + i * seg, a1 = a0 + seg;
+    ctx.beginPath();
+    ctx.moveTo(CX, CX);
+    ctx.arc(CX, CX, R, a0, a1);
+    ctx.closePath();
+    ctx.fillStyle = segColor(i, n);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.9)";
+    ctx.lineWidth = n > 60 ? 1.5 : 3;
+    ctx.stroke();
+
+    if (n <= 36) {
+      let label = list[i].name;
+      if (label.length > maxChars) label = label.slice(0, maxChars - 1) + "…";
+      ctx.save();
+      ctx.translate(CX, CX);
+      ctx.rotate(a0 + seg / 2);
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = TEXT_ON_WHEEL;
+      ctx.font = `700 ${fs}px "Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif`;
+      ctx.fillText(label, R - 26, 0);
+      ctx.restore();
+    }
+  }
+  ctx.beginPath();
+  ctx.arc(CX, CX, R, 0, 2 * Math.PI);
+  ctx.strokeStyle = "rgba(0,0,0,.14)";
+  ctx.lineWidth = 8;
+  ctx.stroke();
+}
+
+/* ══════════ 畫面同步 ══════════ */
+let currentList = [];
+function refresh() {
+  currentList = eligible();
+  $("count").textContent = currentList.length;
+  $("stage").classList.toggle("empty", currentList.length === 0);
+  $("spinBtn").disabled = currentList.length === 0 || state.spinning;
+  drawWheel(currentList);
+  renderChips();
+  renderRoster();
+  renderSkipNote();
+  persist();
+}
+
+function renderChips() {
+  const box = $("chips");
+  box.innerHTML = "";
+  for (const cat of allCatsInData) {
+    const count = RESTAURANTS.filter(r => r.cat === cat).length;
+    const b = document.createElement("button");
+    b.className = "chip" + (state.cats.has(cat) ? " on" : "");
+    b.innerHTML = `${CAT_EMOJI[cat] || "🍽️"} ${cat}<span class="n">${count}</span>`;
+    b.onclick = () => {
+      state.cats.has(cat) ? state.cats.delete(cat) : state.cats.add(cat);
+      refresh();
+    };
+    box.appendChild(b);
+  }
+}
+
+function renderRoster() {
+  const box = $("roster");
+  box.innerHTML = "";
+  const sorted = [...RESTAURANTS].sort((a, b) => a.walk - b.walk || avg(a) - avg(b));
+  for (const r of sorted) {
+    const inFilter = avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat);
+    const skipped = state.skipped.has(r.name);
+    const div = document.createElement("div");
+    div.className = "r-row" + (skipped || !inFilter ? " skipped" : "");
+    div.innerHTML = `
+      <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${r.name}</span>
+        ${skipped ? '<button class="unskip">恢復</button>' : ""}</div>
+      <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${r.walk} 分</span><span>${r.addr}</span></div>
+      ${r.note ? `<div class="r-note">${r.note}</div>` : ""}`;
+    const un = div.querySelector(".unskip");
+    if (un) un.onclick = () => { state.skipped.delete(r.name); refresh(); };
+    box.appendChild(div);
+  }
+}
+
+function renderSkipNote() {
+  $("skipNote").hidden = state.skipped.size === 0;
+  $("skipCount").textContent = state.skipped.size;
+}
+
+/* ══════════ 轉動 ══════════ */
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function spin() {
+  if (state.spinning || currentList.length === 0) return;
+  const list = currentList;
+  const n = list.length;
+  const winner = Math.floor(Math.random() * n);
+  const seg = 2 * Math.PI / n;
+  const pointerAngle = -Math.PI / 2;
+  const t = 0.2 + Math.random() * 0.6;
+  const base = pointerAngle - (winner + t) * seg;
+  const minTurns = reduceMotion ? 1 : 5;
+  const k = Math.ceil((state.rot + minTurns * 2 * Math.PI - base) / (2 * Math.PI));
+  const target = base + k * 2 * Math.PI;
+
+  const start = state.rot;
+  const dist = target - start;
+  const dur = reduceMotion ? 500 : 4400;
+  const t0 = performance.now();
+  state.spinning = true;
+  $("spinBtn").disabled = true;
+  $("brand").classList.add("spinning");
+
+  function frame(now) {
+    const p = Math.min(1, (now - t0) / dur);
+    const ease = 1 - Math.pow(1 - p, 4);
+    state.rot = start + dist * ease;
+    drawWheel(list);
+    if (p < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      state.rot = ((target % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      state.spinning = false;
+      $("brand").classList.remove("spinning");
+      $("spinBtn").disabled = false;
+      showResult(list[winner]);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ══════════ 結果 ══════════ */
+let lastWinner = null;
+function showResult(r) {
+  lastWinner = r;
+  $("rTitle").textContent = r.name;
+  $("rBadges").innerHTML = `
+    <span class="badge">${CAT_EMOJI[r.cat] || ""} ${r.cat}</span>
+    <span class="badge money">NT$${r.price[0]}–${r.price[1]}</span>
+    <span class="badge">🚶 走路約 ${r.walk} 分鐘</span>`;
+  $("rAddr").textContent = r.addr;
+  $("rNote").textContent = r.note || "";
+  $("rNote").style.display = r.note ? "" : "none";
+  $("rMap").href = r.ll
+    ? `https://www.google.com/maps/search/${encodeURIComponent(r.name)}/@${r.ll[0]},${r.ll[1]},18z`
+    : "https://www.google.com/maps/search/?api=1&query=" +
+      encodeURIComponent("台北市 " + r.name + " " + r.addr);
+  $("veil").classList.add("show");
+  confetti();
+}
+function hideResult() { $("veil").classList.remove("show"); }
+
+function confetti() {
+  if (reduceMotion) return;
+  const glyphs = ["🍚", "🍜", "🥢", "🍱", "✨"];
+  for (let i = 0; i < 22; i++) {
+    const el = document.createElement("div");
+    el.className = "confetti";
+    if (Math.random() < 0.45) {
+      el.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+      el.style.fontSize = 14 + Math.random() * 14 + "px";
+    } else {
+      el.style.width = el.style.height = 6 + Math.random() * 8 + "px";
+      el.style.background = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+      el.style.borderRadius = "2px";
+    }
+    el.style.left = Math.random() * 100 + "vw";
+    el.style.animationDuration = 1.4 + Math.random() * 1.4 + "s";
+    el.style.animationDelay = Math.random() * 0.3 + "s";
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+  }
+}
+
+/* ══════════ 事件 ══════════ */
+$("budget").oninput = e => {
+  state.budget = +e.target.value;
+  $("budgetOut").textContent = "NT$" + state.budget;
+  refresh();
+};
+$("walk").oninput = e => {
+  state.walk = +e.target.value;
+  $("walkOut").textContent = state.walk + " 分鐘";
+  refresh();
+};
+$("allCats").onclick = () => { allCatsInData.forEach(c => state.cats.add(c)); refresh(); };
+$("noCats").onclick = () => { state.cats.clear(); refresh(); };
+$("clearSkips").onclick = () => { state.skipped.clear(); refresh(); };
+$("spinBtn").onclick = spin;
+$("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
+$("rSkip").onclick = () => {
+  if (lastWinner) state.skipped.add(lastWinner.name);
+  hideResult();
+  refresh();
+  if (eligible().length > 0) setTimeout(spin, 250);
+};
+$("closeModal").onclick = hideResult;
+$("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") hideResult();
+  if (e.code === "Space" && !$("veil").classList.contains("show")) {
+    e.preventDefault();
+    spin();
+  }
+});
+
+/* ══════════ 初始化 ══════════ */
+$("budget").value = state.budget;
+$("budgetOut").textContent = "NT$" + state.budget;
+$("walk").value = state.walk;
+$("walkOut").textContent = state.walk + " 分鐘";
+refresh();
+</script>
+<!--ARTIFACT-END-->
+</body>
+</html>
