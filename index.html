@@ -295,6 +295,8 @@
     transition: border-color .12s, color .12s;
   }
   .auth-bar button:hover { border-color: var(--action); color: var(--action); }
+  .auth-bar #adBonusBtn { border-color: var(--amber); color: var(--amber); font-weight: 700; }
+  .auth-bar #adBonusBtn[hidden] { display: none; }
 
   .quota-badge {
     background: var(--accent-soft); color: var(--accent); font-weight: 700;
@@ -328,6 +330,32 @@
   .gate-card .g-msg.err { color: var(--action); }
   .gate-card .g-msg.ok { color: var(--accent); font-weight: 700; }
   .gate-card .btn[disabled] { opacity: .55; cursor: progress; }
+
+  /* ── 廣告加轉視窗 ── */
+  .ad-veil {
+    position: fixed; inset: 0; z-index: 65; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(20, 16, 12, .6); backdrop-filter: blur(4px);
+  }
+  .ad-veil.show { display: flex; }
+  .ad-card {
+    background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg);
+    width: min(360px, 100%); padding: 22px; text-align: center;
+    display: flex; flex-direction: column; gap: 14px;
+    animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+  }
+  .ad-banner {
+    background: linear-gradient(135deg, #6C2BD9, #FF3E7F);
+    border-radius: 16px; padding: 26px 18px; color: #fff; position: relative;
+  }
+  .ad-banner .ad-tag {
+    position: absolute; top: 10px; left: 10px; font-size: 11px; font-weight: 700;
+    background: rgba(255,255,255,.25); border-radius: 999px; padding: 2px 9px;
+  }
+  .ad-banner .ad-logo { font-size: 20px; font-weight: 900; margin-top: 10px; }
+  .ad-banner .ad-copy { font-size: 13px; margin-top: 6px; opacity: .92; line-height: 1.5; }
+  .ad-timer { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .ad-card .btn[disabled] { opacity: .45; cursor: progress; }
   @media (prefers-reduced-motion: reduce) { .gate-card { animation: none; } }
 </style>
 
@@ -337,6 +365,7 @@
     <div class="locale">出發點 <strong>基隆路一段 200 號</strong>｜步行圈內平價午餐</div>
     <div class="auth-bar" id="authBar" hidden>
       <span class="quota-badge" id="quotaBadge" hidden></span>
+      <button id="adBonusBtn" hidden>📺 看廣告多轉一次</button>
       <span class="who" id="who"></span>
       <button id="logoutBtn">登出</button>
     </div>
@@ -425,6 +454,18 @@
   </div>
 </div>
 
+<div class="ad-veil" id="adVeil" aria-hidden="true">
+  <div class="ad-card" role="dialog" aria-modal="true" aria-labelledby="adTitle">
+    <div class="ad-banner">
+      <span class="ad-tag">廣告</span>
+      <div class="ad-logo">🏦 遠銀 Bankee</div>
+      <div class="ad-copy" id="adTitle">數位帳戶新戶好禮天天抽<br>年輕人的第一個銀行帳戶</div>
+    </div>
+    <div class="ad-timer" id="adTimer">廣告播放中… 3</div>
+    <button class="btn btn-go" id="adClaim" disabled>看完了，多轉一次！</button>
+  </div>
+</div>
+
 <script type="module">
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -438,7 +479,7 @@ const DAILY_LIMIT = 3;               // 每人每天可轉次數（也要和 SQL
 
 const CONFIGURED = !SUPABASE_URL.includes("YOUR-PROJECT");
 const supabase = CONFIGURED ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-const auth = { user: null, remaining: null, limit: DAILY_LIMIT, busy: false };
+const auth = { user: null, remaining: null, limit: DAILY_LIMIT, busy: false, bonusAvailable: false };
 
 /* ══════════ 資料 ══════════ */
 /* DATA-START */
@@ -1160,16 +1201,19 @@ function setHint(html, warn) {
 }
 
 function flashOutOfSpins() {
-  setHint(`今天的 ${auth.limit} 次轉盤機會已經用完，明天再來吧 🌙`, true);
+  const extra = auth.bonusAvailable ? "，右上角可以看廣告多轉一次" : "，明天再來吧 🌙";
+  setHint(`今天的 ${auth.limit} 次轉盤機會已經用完${extra}`, true);
 }
 
 function updateQuota() {
   const badge = $("quotaBadge");
-  if (!auth.user || auth.remaining === null) { badge.hidden = true; return; }
+  const adBtn = $("adBonusBtn");
+  if (!auth.user || auth.remaining === null) { badge.hidden = true; adBtn.hidden = true; return; }
   const left = Math.max(0, auth.remaining);
   badge.hidden = false;
   badge.textContent = `今天還可轉 ${left}/${auth.limit} 次`;
   badge.classList.toggle("spent", left <= 0);
+  adBtn.hidden = !(left <= 0 && auth.bonusAvailable);
   if (left <= 0) flashOutOfSpins();
   else setHint(DEFAULT_HINT, false);
 }
@@ -1185,15 +1229,60 @@ async function recordSpin() {
   }
 }
 
-/* 只讀取目前剩餘次數，不消耗 */
+/* 只讀取目前剩餘次數與廣告加轉額度，不消耗 */
 async function fetchStatus() {
   try {
     const { data, error } = await supabase.rpc("spin_status", { p_limit: DAILY_LIMIT });
-    if (!error && data) { auth.remaining = data.remaining; auth.limit = data.limit; }
+    if (!error && data) {
+      auth.remaining = data.remaining;
+      auth.limit = data.limit;
+      auth.bonusAvailable = !!data.bonus_available;
+    }
   } catch (e) {}
   updateQuota();
   refresh();
 }
+
+/* ── 廣告加轉 ── */
+let adTimer = null;
+function openAdModal() {
+  if (!auth.user || !auth.bonusAvailable) return;
+  $("adVeil").classList.add("show");
+  $("adClaim").disabled = true;
+  let secs = 3;
+  $("adTimer").textContent = `廣告播放中… ${secs}`;
+  clearInterval(adTimer);
+  adTimer = setInterval(() => {
+    secs -= 1;
+    if (secs <= 0) {
+      clearInterval(adTimer);
+      $("adTimer").textContent = "廣告播放完畢！";
+      $("adClaim").disabled = false;
+    } else {
+      $("adTimer").textContent = `廣告播放中… ${secs}`;
+    }
+  }, 1000);
+}
+function closeAdModal() {
+  clearInterval(adTimer);
+  $("adVeil").classList.remove("show");
+}
+$("adBonusBtn").onclick = openAdModal;
+$("adClaim").onclick = async () => {
+  $("adClaim").disabled = true;
+  try {
+    const { data, error } = await supabase.rpc("claim_ad_bonus");
+    if (!error && data && data.ok) {
+      closeAdModal();
+      await fetchStatus();
+    } else {
+      $("adTimer").textContent = "今天的廣告加轉額度已經領過了";
+    }
+  } catch (e) {
+    $("adTimer").textContent = "連線發生問題，請稍後再試";
+    $("adClaim").disabled = false;
+  }
+};
 
 /* ── 登入視窗 ── */
 function openGate() {

@@ -28,7 +28,47 @@ create policy "read own spins" on public.spins
   for select using (auth.uid() = user_id);
 -- 刻意不建立 insert policy：寫入只能透過下面的 record_spin() 函式。
 
--- ── record_spin：登記一次轉盤（超過上限會被擋下）──────────────
+-- ── ad_bonuses：看廣告換一次額外轉盤機會，每人每天最多領一次 ──
+create table if not exists public.ad_bonuses (
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  bonus_day  date not null default (now() at time zone 'Asia/Taipei')::date,
+  granted_at timestamptz not null default now(),
+  primary key (user_id, bonus_day)
+);
+
+alter table public.ad_bonuses enable row level security;
+
+drop policy if exists "read own ad bonus" on public.ad_bonuses;
+create policy "read own ad bonus" on public.ad_bonuses
+  for select using (auth.uid() = user_id);
+-- 刻意不建立 insert policy：寫入只能透過下面的 claim_ad_bonus() 函式。
+
+-- ── claim_ad_bonus：領取當天的廣告加轉額度（只能領一次）──────
+create or replace function public.claim_ad_bonus()
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_day date := (now() at time zone 'Asia/Taipei')::date;
+  v_new boolean;
+begin
+  if v_uid is null then
+    return json_build_object('ok', false, 'error', 'not_authenticated');
+  end if;
+
+  insert into public.ad_bonuses (user_id, bonus_day)
+  values (v_uid, v_day)
+  on conflict (user_id, bonus_day) do nothing
+  returning true into v_new;
+
+  return json_build_object('ok', true, 'granted', coalesce(v_new, false));
+end;
+$$;
+
+-- ── record_spin：登記一次轉盤（超過上限會被擋下，含廣告加轉額度）
 create or replace function public.record_spin(p_limit int default 3)
 returns json
 language plpgsql
@@ -36,9 +76,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid  uuid := auth.uid();
-  v_day  date := (now() at time zone 'Asia/Taipei')::date;
-  v_used int;
+  v_uid   uuid := auth.uid();
+  v_day   date := (now() at time zone 'Asia/Taipei')::date;
+  v_used  int;
+  v_bonus int;
+  v_limit int;
 begin
   if v_uid is null then
     return json_build_object('ok', false, 'error', 'not_authenticated');
@@ -51,21 +93,27 @@ begin
     from public.spins
    where user_id = v_uid and spin_day = v_day;
 
-  if v_used >= p_limit then
+  select count(*) into v_bonus
+    from public.ad_bonuses
+   where user_id = v_uid and bonus_day = v_day;
+
+  v_limit := p_limit + v_bonus;
+
+  if v_used >= v_limit then
     return json_build_object(
       'ok', false, 'error', 'limit_reached',
-      'used', v_used, 'limit', p_limit, 'remaining', 0);
+      'used', v_used, 'limit', v_limit, 'remaining', 0);
   end if;
 
   insert into public.spins (user_id, spin_day) values (v_uid, v_day);
 
   return json_build_object(
     'ok', true,
-    'used', v_used + 1, 'limit', p_limit, 'remaining', p_limit - (v_used + 1));
+    'used', v_used + 1, 'limit', v_limit, 'remaining', v_limit - (v_used + 1));
 end;
 $$;
 
--- ── spin_status：只讀取剩餘次數，不消耗 ───────────────────────
+-- ── spin_status：只讀取剩餘次數與廣告額度是否還能領，不消耗 ──
 create or replace function public.spin_status(p_limit int default 3)
 returns json
 language plpgsql
@@ -73,9 +121,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid  uuid := auth.uid();
-  v_day  date := (now() at time zone 'Asia/Taipei')::date;
-  v_used int;
+  v_uid   uuid := auth.uid();
+  v_day   date := (now() at time zone 'Asia/Taipei')::date;
+  v_used  int;
+  v_bonus int;
+  v_limit int;
 begin
   if v_uid is null then
     return json_build_object('ok', false, 'error', 'not_authenticated');
@@ -85,14 +135,23 @@ begin
     from public.spins
    where user_id = v_uid and spin_day = v_day;
 
+  select count(*) into v_bonus
+    from public.ad_bonuses
+   where user_id = v_uid and bonus_day = v_day;
+
+  v_limit := p_limit + v_bonus;
+
   return json_build_object(
     'ok', true,
-    'used', v_used, 'limit', p_limit, 'remaining', greatest(0, p_limit - v_used));
+    'used', v_used, 'limit', v_limit, 'remaining', greatest(0, v_limit - v_used),
+    'bonus_available', v_bonus = 0);
 end;
 $$;
 
 -- ── 授權：只有登入使用者可呼叫，anon 不行 ─────────────────────
-revoke all on function public.record_spin(int)  from public, anon;
-revoke all on function public.spin_status(int)   from public, anon;
+revoke all on function public.record_spin(int)   from public, anon;
+revoke all on function public.spin_status(int)    from public, anon;
+revoke all on function public.claim_ad_bonus()    from public, anon;
 grant execute on function public.record_spin(int) to authenticated;
 grant execute on function public.spin_status(int) to authenticated;
+grant execute on function public.claim_ad_bonus() to authenticated;
