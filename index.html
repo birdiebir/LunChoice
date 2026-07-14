@@ -295,8 +295,6 @@
     transition: border-color .12s, color .12s;
   }
   .auth-bar button:hover { border-color: var(--action); color: var(--action); }
-  .auth-bar #adBonusBtn { border-color: var(--amber); color: var(--amber); font-weight: 700; }
-  .auth-bar #adBonusBtn[hidden] { display: none; }
 
   .quota-badge {
     background: var(--accent-soft); color: var(--accent); font-weight: 700;
@@ -344,19 +342,29 @@
     display: flex; flex-direction: column; gap: 14px;
     animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
   }
-  .ad-banner {
-    background: linear-gradient(135deg, #6C2BD9, #FF3E7F);
-    border-radius: 16px; padding: 26px 18px; color: #fff; position: relative;
+  .ad-media { position: relative; border-radius: 16px; overflow: hidden; line-height: 0; }
+  .ad-media img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; }
+  .ad-media .ad-tag {
+    position: absolute; top: 10px; left: 10px; font-size: 11px; font-weight: 700; color: #fff;
+    background: rgba(0,0,0,.45); border-radius: 999px; padding: 2px 9px;
   }
-  .ad-banner .ad-tag {
-    position: absolute; top: 10px; left: 10px; font-size: 11px; font-weight: 700;
-    background: rgba(255,255,255,.25); border-radius: 999px; padding: 2px 9px;
-  }
-  .ad-banner .ad-logo { font-size: 20px; font-weight: 900; margin-top: 10px; }
-  .ad-banner .ad-copy { font-size: 13px; margin-top: 6px; opacity: .92; line-height: 1.5; }
+  .ad-copy { font-size: 13px; color: var(--text-2); }
   .ad-timer { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
   .ad-card .btn[disabled] { opacity: .45; cursor: progress; }
   @media (prefers-reduced-motion: reduce) { .gate-card { animation: none; } }
+
+  /* ── 轉盤上的廣告加轉提示 ── */
+  .ad-invite {
+    position: absolute; inset: 0; z-index: 6; display: none;
+    align-items: center; justify-content: center; text-align: center;
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    border-radius: 50%; padding: 15%;
+  }
+  .ad-invite:not([hidden]) { display: flex; }
+  .ad-invite-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .ad-invite-emoji { font-size: 32px; }
+  .ad-invite-text { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+  .ad-invite .btn { padding: 10px 16px; font-size: 14px; }
 </style>
 
 <div class="app">
@@ -365,7 +373,6 @@
     <div class="locale">出發點 <strong>基隆路一段 200 號</strong>｜步行圈內平價午餐</div>
     <div class="auth-bar" id="authBar" hidden>
       <span class="quota-badge" id="quotaBadge" hidden></span>
-      <button id="adBonusBtn" hidden>📺 看廣告多轉一次</button>
       <span class="who" id="who"></span>
       <button id="logoutBtn">登出</button>
     </div>
@@ -379,6 +386,13 @@
         <canvas id="wheel" width="1000" height="1000" aria-label="午餐轉輪"></canvas>
         <button class="hub" id="spinBtn">轉！</button>
         <div class="empty-note">沒有符合條件的店 😥<br>放寬一點預算或走路時間吧</div>
+        <div class="ad-invite" id="adInvite" hidden>
+          <div class="ad-invite-inner">
+            <div class="ad-invite-emoji">📺</div>
+            <div class="ad-invite-text">今天的次數用完了<br>看廣告多轉一次？</div>
+            <button class="btn btn-go" id="adBonusBtn">看廣告，多轉一次</button>
+          </div>
+        </div>
       </div>
       <div class="hint" id="hint">按中間的「轉！」或按空白鍵，午餐就交給命運<br>店家超過 36 家時輪面不顯示店名，轉到誰看結果卡揭曉</div>
     </section>
@@ -456,11 +470,11 @@
 
 <div class="ad-veil" id="adVeil" aria-hidden="true">
   <div class="ad-card" role="dialog" aria-modal="true" aria-labelledby="adTitle">
-    <div class="ad-banner">
+    <div class="ad-media">
       <span class="ad-tag">廣告</span>
-      <div class="ad-logo">🏦 遠銀 Bankee</div>
-      <div class="ad-copy" id="adTitle">數位帳戶新戶好禮天天抽<br>年輕人的第一個銀行帳戶</div>
+      <img src="assets/ad-placeholder.png" alt="遠銀 Bankee 廣告">
     </div>
+    <div class="ad-copy" id="adTitle">🏦 遠銀 Bankee — 數位帳戶新戶好禮天天抽</div>
     <div class="ad-timer" id="adTimer">廣告播放中… 3</div>
     <button class="btn btn-go" id="adClaim" disabled>看完了，多轉一次！</button>
   </div>
@@ -1201,19 +1215,19 @@ function setHint(html, warn) {
 }
 
 function flashOutOfSpins() {
-  const extra = auth.bonusAvailable ? "，右上角可以看廣告多轉一次" : "，明天再來吧 🌙";
+  const extra = auth.bonusAvailable ? "，轉盤上可以看廣告多轉一次" : "，明天再來吧 🌙";
   setHint(`今天的 ${auth.limit} 次轉盤機會已經用完${extra}`, true);
 }
 
 function updateQuota() {
   const badge = $("quotaBadge");
-  const adBtn = $("adBonusBtn");
-  if (!auth.user || auth.remaining === null) { badge.hidden = true; adBtn.hidden = true; return; }
+  const adInvite = $("adInvite");
+  if (!auth.user || auth.remaining === null) { badge.hidden = true; adInvite.hidden = true; return; }
   const left = Math.max(0, auth.remaining);
   badge.hidden = false;
   badge.textContent = `今天還可轉 ${left}/${auth.limit} 次`;
   badge.classList.toggle("spent", left <= 0);
-  adBtn.hidden = !(left <= 0 && auth.bonusAvailable);
+  adInvite.hidden = !(left <= 0 && auth.bonusAvailable);
   if (left <= 0) flashOutOfSpins();
   else setHint(DEFAULT_HINT, false);
 }
