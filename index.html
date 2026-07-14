@@ -284,12 +284,62 @@
     .ticket { animation: none; }
     .confetti { display: none; }
   }
+
+  /* ── auth bar ── */
+  .auth-bar { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+  .auth-bar[hidden] { display: none; }
+  .auth-bar .who { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .auth-bar button {
+    background: none; border: 1px solid var(--line); color: var(--text-2);
+    font: inherit; font-size: 12.5px; border-radius: 999px; padding: 4px 12px; cursor: pointer;
+    transition: border-color .12s, color .12s;
+  }
+  .auth-bar button:hover { border-color: var(--action); color: var(--action); }
+
+  .quota-badge {
+    background: var(--accent-soft); color: var(--accent); font-weight: 700;
+    border-radius: 999px; padding: 4px 12px; font-size: 13px; font-variant-numeric: tabular-nums;
+  }
+  .quota-badge[hidden] { display: none; }
+  .quota-badge.spent { background: color-mix(in srgb, var(--action) 16%, transparent); color: var(--action); }
+
+  /* ── login gate ── */
+  .gate {
+    position: fixed; inset: 0; z-index: 70; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(20, 16, 12, .6); backdrop-filter: blur(4px);
+  }
+  .gate.show { display: flex; }
+  .gate-card {
+    background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg);
+    width: min(400px, 100%); padding: 30px 26px; text-align: center;
+    display: flex; flex-direction: column; gap: 15px;
+    animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+  }
+  .gate-card .g-emoji { font-size: 40px; }
+  .gate-card h2 { margin: 0; font-size: 22px; font-weight: 900; }
+  .gate-card p { margin: 0; font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
+  .gate-card input[type="email"] {
+    width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px;
+    font: inherit; font-size: 15px; background: var(--surface-2); color: var(--text);
+  }
+  .gate-card input[type="email"]:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .gate-card .g-msg { font-size: 13px; min-height: 18px; }
+  .gate-card .g-msg.err { color: var(--action); }
+  .gate-card .g-msg.ok { color: var(--accent); font-weight: 700; }
+  .gate-card .btn[disabled] { opacity: .55; cursor: progress; }
+  @media (prefers-reduced-motion: reduce) { .gate-card { animation: none; } }
 </style>
 
 <div class="app">
   <header class="masthead">
     <h1 class="brand" id="brand">午餐大<span class="zhuan">轉</span>輪</h1>
     <div class="locale">出發點 <strong>基隆路一段 200 號</strong>｜步行圈內平價午餐</div>
+    <div class="auth-bar" id="authBar" hidden>
+      <span class="quota-badge" id="quotaBadge" hidden></span>
+      <span class="who" id="who"></span>
+      <button id="logoutBtn">登出</button>
+    </div>
   </header>
 
   <main class="board">
@@ -301,7 +351,7 @@
         <button class="hub" id="spinBtn">轉！</button>
         <div class="empty-note">沒有符合條件的店 😥<br>放寬一點預算或走路時間吧</div>
       </div>
-      <div class="hint">按中間的「轉！」或按空白鍵，午餐就交給命運<br>店家超過 36 家時輪面不顯示店名，轉到誰看結果卡揭曉</div>
+      <div class="hint" id="hint">按中間的「轉！」或按空白鍵，午餐就交給命運<br>店家超過 36 家時輪面不顯示店名，轉到誰看結果卡揭曉</div>
     </section>
 
     <aside class="card slip" aria-label="今日條件">
@@ -363,7 +413,32 @@
   </div>
 </div>
 
-<script>
+<div class="gate" id="gate" aria-hidden="true">
+  <div class="gate-card" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+    <div class="g-emoji" aria-hidden="true">🍱</div>
+    <h2 id="gateTitle">先登入，再開轉</h2>
+    <p>每人每天有 <strong>3 次</strong>轉盤機會。<br>輸入 email，我們會寄一條登入連結給你，點一下就能開始。</p>
+    <input type="email" id="gateEmail" placeholder="you@example.com" autocomplete="email" inputmode="email">
+    <button class="btn btn-go" id="gateSend">寄送登入連結</button>
+    <div class="g-msg" id="gateMsg" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+/* ══════════════════════════════════════════════════════════
+   Supabase 設定 — 把下面兩個值換成你自己專案的資料
+   （Supabase 後台 → Project Settings → API）
+   ══════════════════════════════════════════════════════════ */
+const SUPABASE_URL = "https://tjnyeqmxofmheumsntkz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqbnllcW14b2ZtaGV1bXNudGt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5OTM3MzMsImV4cCI6MjA5OTU2OTczM30.VLWZMj3j9cBcou7dxGwl3j8SEWfelvIFGJhM6ltFxOI";
+const DAILY_LIMIT = 3;               // 每人每天可轉次數（也要和 SQL 內的預設一致）
+
+const CONFIGURED = !SUPABASE_URL.includes("YOUR-PROJECT");
+const supabase = CONFIGURED ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const auth = { user: null, remaining: null, limit: DAILY_LIMIT, busy: false };
+
 /* ══════════ 資料 ══════════ */
 /* DATA-START */
 const RESTAURANTS = [
@@ -871,7 +946,8 @@ function refresh() {
   currentList = eligible();
   $("count").textContent = currentList.length;
   $("stage").classList.toggle("empty", currentList.length === 0);
-  $("spinBtn").disabled = currentList.length === 0 || state.spinning;
+  $("spinBtn").disabled =
+    currentList.length === 0 || state.spinning || auth.busy || !auth.user || outOfSpins();
   drawWheel(currentList);
   renderChips();
   renderRoster();
@@ -923,7 +999,37 @@ function renderSkipNote() {
 /* ══════════ 轉動 ══════════ */
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function spin() {
+/* 對外的入口：先向伺服器登記一次「轉盤」，成功（未超過每日上限）才播放動畫。
+   次數的真正把關在 Supabase 端，前端擋不住也改不掉。 */
+async function spin() {
+  if (state.spinning || auth.busy || currentList.length === 0) return;
+  if (!CONFIGURED) { openGate(); return; }
+  if (!auth.user) { openGate(); return; }
+  if (outOfSpins()) { flashOutOfSpins(); return; }
+
+  auth.busy = true;
+  refresh();
+  const res = await recordSpin();
+  auth.busy = false;
+
+  if (!res || !res.ok) {
+    if (res && res.error === "limit_reached") {
+      auth.remaining = 0;
+      updateQuota();
+      flashOutOfSpins();
+    } else {
+      setHint("⚠️ 連線發生問題，請稍後再試", true);
+    }
+    refresh();
+    return;
+  }
+
+  auth.remaining = res.remaining;
+  updateQuota();
+  animateSpin();
+}
+
+function animateSpin() {
   if (state.spinning || currentList.length === 0) return;
   const list = currentList;
   const n = list.length;
@@ -955,7 +1061,7 @@ function spin() {
       state.rot = ((target % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
       state.spinning = false;
       $("brand").classList.remove("spinning");
-      $("spinBtn").disabled = false;
+      refresh();   // 依登入狀態與剩餘次數重新決定按鈕是否可按
       showResult(list[winner]);
     }
   }
@@ -1031,11 +1137,110 @@ $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") hideResult();
-  if (e.code === "Space" && !$("veil").classList.contains("show")) {
+  if (e.code === "Space"
+      && !$("veil").classList.contains("show")
+      && !$("gate").classList.contains("show")
+      && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) {
     e.preventDefault();
     spin();
   }
 });
+
+/* ══════════ 登入 / 每日次數 ══════════ */
+const DEFAULT_HINT = $("hint").innerHTML;
+
+function outOfSpins() {
+  return !!auth.user && auth.remaining !== null && auth.remaining <= 0;
+}
+
+function setHint(html, warn) {
+  $("hint").innerHTML = html;
+  $("hint").style.color = warn ? "var(--action)" : "";
+}
+
+function flashOutOfSpins() {
+  setHint(`今天的 ${auth.limit} 次轉盤機會已經用完，明天再來吧 🌙`, true);
+}
+
+function updateQuota() {
+  const badge = $("quotaBadge");
+  if (!auth.user || auth.remaining === null) { badge.hidden = true; return; }
+  const left = Math.max(0, auth.remaining);
+  badge.hidden = false;
+  badge.textContent = `今天還可轉 ${left}/${auth.limit} 次`;
+  badge.classList.toggle("spent", left <= 0);
+  if (left <= 0) flashOutOfSpins();
+  else setHint(DEFAULT_HINT, false);
+}
+
+/* 向伺服器登記一次轉盤（原子操作，超過上限會被擋下） */
+async function recordSpin() {
+  try {
+    const { data, error } = await supabase.rpc("record_spin", { p_limit: DAILY_LIMIT });
+    if (error) return { ok: false, error: "rpc_error", message: error.message };
+    return data;
+  } catch (e) {
+    return { ok: false, error: "network", message: String(e) };
+  }
+}
+
+/* 只讀取目前剩餘次數，不消耗 */
+async function fetchStatus() {
+  try {
+    const { data, error } = await supabase.rpc("spin_status", { p_limit: DAILY_LIMIT });
+    if (!error && data) { auth.remaining = data.remaining; auth.limit = data.limit; }
+  } catch (e) {}
+  updateQuota();
+  refresh();
+}
+
+/* ── 登入視窗 ── */
+function openGate() {
+  if (auth.user) return;
+  $("gate").classList.add("show");
+  if (!CONFIGURED) {
+    setGateMsg("尚未設定 Supabase：請在 index.html 頂端填入 SUPABASE_URL 與 ANON KEY", "err");
+    $("gateSend").disabled = true;
+  }
+}
+function closeGate() { $("gate").classList.remove("show"); }
+function setGateMsg(text, kind) {
+  const m = $("gateMsg");
+  m.textContent = text;
+  m.className = "g-msg" + (kind ? " " + kind : "");
+}
+
+async function applySession(session) {
+  auth.user = session?.user ?? null;
+  if (auth.user) {
+    closeGate();
+    $("authBar").hidden = false;
+    $("who").textContent = auth.user.email || "已登入";
+    await fetchStatus();
+  } else {
+    auth.remaining = null;
+    $("authBar").hidden = true;
+    updateQuota();
+    refresh();
+    openGate();
+  }
+}
+
+$("gateSend").onclick = async () => {
+  const email = $("gateEmail").value.trim();
+  if (!email || !email.includes("@")) { setGateMsg("請輸入正確的 email", "err"); return; }
+  $("gateSend").disabled = true;
+  setGateMsg("寄送中…", "");
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: location.href.split("#")[0] }
+  });
+  $("gateSend").disabled = false;
+  if (error) setGateMsg(error.message, "err");
+  else setGateMsg("✅ 登入連結已寄出，請到信箱點擊連結完成登入", "ok");
+};
+$("gateEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("gateSend").click(); });
+$("logoutBtn").onclick = async () => { if (supabase) await supabase.auth.signOut(); };
 
 /* ══════════ 初始化 ══════════ */
 $("budget").value = state.budget;
@@ -1043,6 +1248,14 @@ $("budgetOut").textContent = "NT$" + state.budget;
 $("walk").value = state.walk;
 $("walkOut").textContent = state.walk + " 分鐘";
 refresh();
+
+/* 啟動 Supabase 登入流程 */
+if (CONFIGURED) {
+  supabase.auth.onAuthStateChange((_evt, session) => applySession(session));
+  supabase.auth.getSession().then(({ data }) => applySession(data.session));
+} else {
+  openGate();
+}
 </script>
 <!--ARTIFACT-END-->
 </body>
