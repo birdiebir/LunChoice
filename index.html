@@ -319,15 +319,18 @@
   .gate-card .g-emoji { font-size: 40px; }
   .gate-card h2 { margin: 0; font-size: 22px; font-weight: 900; }
   .gate-card p { margin: 0; font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
-  .gate-card input[type="email"] {
+  .gate-card input[type="email"], .gate-card input[type="password"] {
     width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px;
     font: inherit; font-size: 15px; background: var(--surface-2); color: var(--text);
   }
-  .gate-card input[type="email"]:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .gate-card input[type="email"]:focus-visible, .gate-card input[type="password"]:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
   .gate-card .g-msg { font-size: 13px; min-height: 18px; }
   .gate-card .g-msg.err { color: var(--action); }
   .gate-card .g-msg.ok { color: var(--accent); font-weight: 700; }
   .gate-card .btn[disabled] { opacity: .55; cursor: progress; }
+  .gate-actions { display: flex; gap: 10px; }
+  .gate-actions .btn { flex: 1; }
+  .btn-outline { background: none; color: var(--text); box-shadow: inset 0 0 0 1.5px var(--line); }
   @media (prefers-reduced-motion: reduce) { .gate-card { animation: none; } }
 </style>
 
@@ -417,9 +420,13 @@
   <div class="gate-card" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
     <div class="g-emoji" aria-hidden="true">🍱</div>
     <h2 id="gateTitle">先登入，再開轉</h2>
-    <p>每人每天有 <strong>3 次</strong>轉盤機會。<br>輸入 email，我們會寄一條登入連結給你，點一下就能開始。</p>
+    <p>每人每天有 <strong>3 次</strong>轉盤機會。<br>輸入帳號與密碼即可登入；還沒有帳號的話按「註冊」就會直接建立。</p>
     <input type="email" id="gateEmail" placeholder="you@example.com" autocomplete="email" inputmode="email">
-    <button class="btn btn-go" id="gateSend">寄送登入連結</button>
+    <input type="password" id="gatePassword" placeholder="密碼（至少 6 碼）" autocomplete="current-password">
+    <div class="gate-actions">
+      <button class="btn btn-go" id="gateLogin">登入</button>
+      <button class="btn btn-outline" id="gateSignup">註冊</button>
+    </div>
     <div class="g-msg" id="gateMsg" role="status" aria-live="polite"></div>
   </div>
 </div>
@@ -1200,7 +1207,8 @@ function openGate() {
   $("gate").classList.add("show");
   if (!CONFIGURED) {
     setGateMsg("尚未設定 Supabase：請在 index.html 頂端填入 SUPABASE_URL 與 ANON KEY", "err");
-    $("gateSend").disabled = true;
+    $("gateLogin").disabled = true;
+    $("gateSignup").disabled = true;
   }
 }
 function closeGate() { $("gate").classList.remove("show"); }
@@ -1226,20 +1234,40 @@ async function applySession(session) {
   }
 }
 
-$("gateSend").onclick = async () => {
+function readGateInput() {
   const email = $("gateEmail").value.trim();
-  if (!email || !email.includes("@")) { setGateMsg("請輸入正確的 email", "err"); return; }
-  $("gateSend").disabled = true;
-  setGateMsg("寄送中…", "");
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: location.href.split("#")[0] }
+  const password = $("gatePassword").value;
+  if (!email || !email.includes("@")) { setGateMsg("請輸入正確的 email", "err"); return null; }
+  if (!password || password.length < 6) { setGateMsg("密碼至少需要 6 碼", "err"); return null; }
+  return { email, password };
+}
+async function withGateBusy(busyText, fn) {
+  $("gateLogin").disabled = true;
+  $("gateSignup").disabled = true;
+  setGateMsg(busyText, "");
+  try { await fn(); }
+  finally { $("gateLogin").disabled = false; $("gateSignup").disabled = false; }
+}
+$("gateLogin").onclick = async () => {
+  const cred = readGateInput();
+  if (!cred) return;
+  await withGateBusy("登入中…", async () => {
+    const { error } = await supabase.auth.signInWithPassword(cred);
+    if (error) setGateMsg(error.message, "err");
   });
-  $("gateSend").disabled = false;
-  if (error) setGateMsg(error.message, "err");
-  else setGateMsg("✅ 登入連結已寄出，請到信箱點擊連結完成登入", "ok");
 };
-$("gateEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("gateSend").click(); });
+$("gateSignup").onclick = async () => {
+  const cred = readGateInput();
+  if (!cred) return;
+  await withGateBusy("註冊中…", async () => {
+    const { data, error } = await supabase.auth.signUp(cred);
+    if (error) setGateMsg(error.message, "err");
+    else if (!data.session) setGateMsg("✅ 帳號已建立，請到信箱完成驗證後再登入", "ok");
+    // 若 Supabase 後台「Confirm email」已關閉，signUp 會直接回傳 session，onAuthStateChange 會自動帶你進場
+  });
+};
+$("gatePassword").addEventListener("keydown", e => { if (e.key === "Enter") $("gateLogin").click(); });
+$("gateEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("gatePassword").focus(); });
 $("logoutBtn").onclick = async () => { if (supabase) await supabase.auth.signOut(); };
 
 /* ══════════ 初始化 ══════════ */
