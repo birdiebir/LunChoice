@@ -338,9 +338,13 @@
   .ad-veil.show { display: flex; }
   .ad-card {
     background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg);
-    width: min(360px, 100%); padding: 22px; text-align: center;
+    width: min(360px, 100%); padding: 22px; text-align: center; position: relative;
     display: flex; flex-direction: column; gap: 14px;
     animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+  }
+  .ad-card .close {
+    position: absolute; top: 8px; right: 10px; background: none; border: none;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px; z-index: 1;
   }
   .ad-media { position: relative; border-radius: 16px; overflow: hidden; line-height: 0; }
   .ad-media img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; }
@@ -470,6 +474,7 @@
 
 <div class="ad-veil" id="adVeil" aria-hidden="true">
   <div class="ad-card" role="dialog" aria-modal="true" aria-labelledby="adTitle">
+    <button class="close" id="adCloseBtn" aria-label="關閉">×</button>
     <div class="ad-media">
       <span class="ad-tag">廣告</span>
       <img src="assets/ad-placeholder.png" alt="遠銀 Bankee 廣告">
@@ -1192,7 +1197,7 @@ $("rSkip").onclick = () => {
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") hideResult();
+  if (e.key === "Escape") { hideResult(); closeAdModal(); }
   if (e.code === "Space"
       && !$("veil").classList.contains("show")
       && !$("gate").classList.contains("show")
@@ -1282,6 +1287,8 @@ function closeAdModal() {
   $("adVeil").classList.remove("show");
 }
 $("adBonusBtn").onclick = openAdModal;
+$("adCloseBtn").onclick = closeAdModal;
+$("adVeil").onclick = e => { if (e.target === $("adVeil")) closeAdModal(); };
 $("adClaim").onclick = async () => {
   $("adClaim").disabled = true;
   try {
