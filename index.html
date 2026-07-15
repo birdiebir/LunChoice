@@ -72,10 +72,10 @@
       </div>
 
       <div class="field" id="originField">
-        <label>出發點<output id="originOut">基隆路一段 200 號</output></label>
-        <div class="origin-actions">
-          <button id="useMyLocationBtn" type="button">📍 使用目前位置</button>
-          <button id="resetOriginBtn" type="button" hidden>恢復預設</button>
+        <label>出發點</label>
+        <div class="wheel-tabs origin-tabs" role="tablist" aria-label="出發點">
+          <button class="wheel-tab on" id="originDefaultBtn" type="button" role="tab" aria-selected="true">基隆路一段 200 號</button>
+          <button class="wheel-tab" id="originGpsBtn" type="button" role="tab" aria-selected="false">📍 目前位置</button>
         </div>
         <div class="origin-msg" id="originMsg">走路時間會跟著重算，只影響預設轉盤（直線距離估算，非實際路線）；共享轉盤地點維持原本存的資料</div>
       </div>

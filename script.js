@@ -878,32 +878,38 @@ function setOriginMsg(text, kind) {
   m.textContent = text;
   m.className = "origin-msg" + (kind ? " " + kind : "");
 }
-$("useMyLocationBtn").onclick = () => {
+function syncOriginTabs() {
+  const usingGps = !!customOrigin;
+  $("originDefaultBtn").classList.toggle("on", !usingGps);
+  $("originDefaultBtn").setAttribute("aria-selected", String(!usingGps));
+  $("originGpsBtn").classList.toggle("on", usingGps);
+  $("originGpsBtn").setAttribute("aria-selected", String(usingGps));
+}
+$("originDefaultBtn").onclick = () => {
+  if (!customOrigin) return;
+  customOrigin = null;
+  syncOriginTabs();
+  setOriginMsg("走路時間會跟著重算，只影響預設轉盤（直線距離估算，非實際路線）；共享轉盤地點維持原本存的資料", "");
+  refresh();
+};
+$("originGpsBtn").onclick = () => {
   if (!navigator.geolocation) { setOriginMsg("這個瀏覽器不支援定位功能", "err"); return; }
-  $("useMyLocationBtn").disabled = true;
+  $("originGpsBtn").disabled = true;
   setOriginMsg("定位中…", "");
   navigator.geolocation.getCurrentPosition(
     pos => {
       customOrigin = [pos.coords.latitude, pos.coords.longitude];
-      $("originOut").textContent = "目前位置";
-      $("resetOriginBtn").hidden = false;
-      $("useMyLocationBtn").disabled = false;
+      $("originGpsBtn").disabled = false;
+      syncOriginTabs();
       setOriginMsg("已套用目前位置，預設轉盤的走路時間跟著重算（直線距離估算，非實際路線）", "ok");
       refresh();
     },
     () => {
-      $("useMyLocationBtn").disabled = false;
+      $("originGpsBtn").disabled = false;
       setOriginMsg("定位失敗，請確認瀏覽器/系統有允許這個網頁存取位置", "err");
     },
     { enableHighAccuracy: false, timeout: 10000 }
   );
-};
-$("resetOriginBtn").onclick = () => {
-  customOrigin = null;
-  $("originOut").textContent = "基隆路一段 200 號";
-  $("resetOriginBtn").hidden = true;
-  setOriginMsg("走路時間會跟著重算，只影響預設轉盤（直線距離估算，非實際路線）；共享轉盤地點維持原本存的資料", "");
-  refresh();
 };
 $("spinBtn").onclick = spin;
 $("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
