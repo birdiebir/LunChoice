@@ -917,7 +917,7 @@ function updateQuota() {
   if (!auth.user || auth.remaining === null) { badge.hidden = true; bonusInvite.hidden = true; return; }
   const left = Math.max(0, auth.remaining);
   badge.hidden = false;
-  badge.textContent = `今天還可轉 ${left}/${auth.limit} 次`;
+  badge.textContent = `今天還可轉 ${left} 次`;
   badge.classList.toggle("spent", left <= 0);
   bonusInvite.hidden = AD_TEST_MODE ? state.spinning : (!(left <= 0 && auth.bonusAvailable) || state.spinning);
   if (left <= 0) flashOutOfSpins();
