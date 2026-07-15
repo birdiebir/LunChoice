@@ -257,12 +257,20 @@
   .r-row {
     background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
     padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px;
+    position: relative;
   }
   .r-row.skipped { opacity: .45; }
-  .r-row .r-name { font-weight: 700; font-size: 14.5px; display: flex; justify-content: space-between; gap: 8px; }
+  .r-row .r-name { font-weight: 700; font-size: 14.5px; display: flex; justify-content: space-between; gap: 8px; padding-right: 22px; }
   .r-row .r-meta { color: var(--text-2); display: flex; gap: 10px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
   .r-row .r-note { color: var(--text-2); font-size: 12.5px; }
   .r-row .unskip { background: none; border: none; color: var(--action); font: inherit; font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; white-space: nowrap; }
+  .r-edit-btn {
+    position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
+    border: none; background: var(--surface-2); color: var(--text-2); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; padding: 0;
+    transition: background .12s, color .12s;
+  }
+  .r-edit-btn:hover { background: var(--accent-soft); color: var(--accent); }
 
   footer.colophon { margin-top: 34px; font-size: 12px; color: var(--text-2); text-align: center; letter-spacing: .5px; }
 
@@ -748,6 +756,7 @@
 
     <div class="spot-msg" id="spotMsg" role="status" aria-live="polite"></div>
     <button class="btn btn-go" id="spotSubmitBtn" type="button">新增到共享清單</button>
+    <button class="btn btn-again" id="spotCancelBtn" type="button">取消</button>
   </div>
 </div>
 
@@ -1401,12 +1410,15 @@ function renderRoster() {
     const div = document.createElement("div");
     div.className = "r-row" + (skipped || !inFilter ? " skipped" : "");
     div.innerHTML = `
+      ${state.wheelMode === "shared" ? '<button class="r-edit-btn" type="button" aria-label="編輯這筆資料">✎</button>' : ""}
       <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span>
         ${skipped ? '<button class="unskip">恢復</button>' : ""}</div>
       <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${r.walk} 分</span><span>${escapeHtml(r.addr)}</span></div>
       ${r.note ? `<div class="r-note">${escapeHtml(r.note)}</div>` : ""}`;
     const un = div.querySelector(".unskip");
     if (un) un.onclick = () => { state.skipped.delete(r.name); refresh(); };
+    const editBtn = div.querySelector(".r-edit-btn");
+    if (editBtn) editBtn.onclick = () => openEditSpotModal(r);
     box.appendChild(div);
   }
 }
@@ -1454,6 +1466,13 @@ function subscribeSharedSpots() {
       if (sharedSpots.some(s => s.id === payload.new.id)) return;
       sharedSpots.push(mapSharedRow(payload.new));
       updateSharedCountBadge();
+      if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "shared_spots" }, payload => {
+      // 別人編輯了共享地點：同步更新本機資料，讓大家的畫面即時一致
+      const i = sharedSpots.findIndex(s => s.id === payload.new.id);
+      if (i === -1) return;
+      sharedSpots[i] = mapSharedRow(payload.new);
       if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
     })
     .subscribe();
@@ -1740,13 +1759,32 @@ $("bonusWatchBtn").onclick = openBonusModal;
 $("bonusCloseBtn").onclick = claimAndCloseBonusModal;
 $("bonusVeil").onclick = e => { if (e.target === $("bonusVeil")) closeBonusModal(); };
 
-/* ── 共享轉盤：新增地點表單 ── */
+/* ── 共享轉盤：新增／編輯地點表單（同一個彈窗共用） ── */
 $("spotCat").innerHTML = CAT_ORDER.map(c => `<option value="${c}">${CAT_EMOJI[c] || ""} ${c}</option>`).join("");
 
 let spotParsedLatLng = null; // 自動帶入解析到的經緯度，跟著表單一起送出
+let editingSpotId = null;    // null＝新增模式；有值＝正在編輯這筆 shared_spots.id
 
 function openSpotModal() {
   if (!auth.user) { openGate(); return; }
+  resetSpotForm();
+  $("spotTitle").textContent = "新增地點到共享清單";
+  $("spotSubmitBtn").textContent = "新增到共享清單";
+  $("spotVeil").classList.add("show");
+  $("spotVeil").setAttribute("aria-hidden", "false");
+}
+function openEditSpotModal(spot) {
+  if (!auth.user) { openGate(); return; }
+  resetSpotForm();
+  editingSpotId = spot.id;
+  $("spotTitle").textContent = "編輯地點";
+  $("spotSubmitBtn").textContent = "儲存變更";
+  $("spotName").value = spot.name;
+  $("spotCat").value = spot.cat;
+  $("spotPriceMin").value = spot.price[0];
+  $("spotPriceMax").value = spot.price[1];
+  $("spotWalk").value = spot.walk;
+  if (spot.ll) spotParsedLatLng = spot.ll;
   $("spotVeil").classList.add("show");
   $("spotVeil").setAttribute("aria-hidden", "false");
 }
@@ -1755,6 +1793,7 @@ function closeSpotModal() {
   $("spotVeil").setAttribute("aria-hidden", "true");
 }
 function resetSpotForm() {
+  editingSpotId = null;
   $("spotQuickUrl").value = "";
   $("spotQuickMsg").textContent = "";
   $("spotQuickMsg").className = "spot-quick-msg";
@@ -1787,6 +1826,7 @@ function estimateWalkMinutes(lat, lng) {
 
 $("addSpotBtn").onclick = openSpotModal;
 $("spotCloseBtn").onclick = closeSpotModal;
+$("spotCancelBtn").onclick = closeSpotModal;
 $("spotVeil").onclick = e => { if (e.target === $("spotVeil")) closeSpotModal(); };
 
 $("spotAutoFillBtn").onclick = async () => {
@@ -1825,6 +1865,16 @@ $("spotAutoFillBtn").onclick = async () => {
   }
 };
 
+/* 樂觀更新：本機的 sharedSpots 陣列先改掉、畫面立刻反映，
+   不用等 Realtime 事件繞一圈回來（其他使用者那邊還是靠 Realtime 同步）。 */
+function patchLocalSharedSpot(id, patch) {
+  const i = sharedSpots.findIndex(s => s.id === id);
+  if (i === -1) return;
+  sharedSpots[i] = { ...sharedSpots[i], ...patch };
+  recomputeCatsInData();
+  refresh();
+}
+
 $("spotSubmitBtn").onclick = async () => {
   if (!auth.user) { openGate(); return; }
   const name = $("spotName").value.trim();
@@ -1837,16 +1887,25 @@ $("spotSubmitBtn").onclick = async () => {
   if (!name) { setSpotMsg("請填店名", "err"); return; }
 
   $("spotSubmitBtn").disabled = true;
-  setSpotMsg("送出中…", "");
+  setSpotMsg(editingSpotId ? "儲存中…" : "送出中…", "");
   try {
-    const payload = {
-      name, cat, price_min: priceMin, price_max: priceMax, walk,
-      maps_url: mapsUrl, created_by: auth.user.id
-    };
+    const payload = { name, cat, price_min: priceMin, price_max: priceMax, walk, maps_url: mapsUrl };
     if (spotParsedLatLng) { payload.lat = spotParsedLatLng[0]; payload.lng = spotParsedLatLng[1]; }
-    const { error } = await supabase.from("shared_spots").insert(payload);
-    if (error) { setSpotMsg("新增失敗：" + error.message, "err"); return; }
-    setSpotMsg("新增成功！", "ok");
+
+    if (editingSpotId) {
+      const { error } = await supabase.from("shared_spots").update(payload).eq("id", editingSpotId);
+      if (error) { setSpotMsg("儲存失敗：" + error.message, "err"); return; }
+      patchLocalSharedSpot(editingSpotId, {
+        name, cat, price: [priceMin, priceMax], walk,
+        ll: spotParsedLatLng || sharedSpots.find(s => s.id === editingSpotId)?.ll || null
+      });
+      setSpotMsg("已儲存變更！", "ok");
+    } else {
+      payload.created_by = auth.user.id;
+      const { error } = await supabase.from("shared_spots").insert(payload);
+      if (error) { setSpotMsg("新增失敗：" + error.message, "err"); return; }
+      setSpotMsg("新增成功！", "ok");
+    }
     resetSpotForm();
     setTimeout(closeSpotModal, 700);
   } catch (e) {

@@ -238,8 +238,14 @@ drop policy if exists "insert own shared spot" on public.shared_spots;
 create policy "insert own shared spot" on public.shared_spots
   for insert with check (auth.uid() = created_by);
 
+-- 編輯是維基式共同維護：任何登入使用者都能改任何一筆（不限本人新增的）。
+drop policy if exists "any member can update shared spot" on public.shared_spots;
+create policy "any member can update shared spot" on public.shared_spots
+  for update using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
 revoke all on public.shared_spots from public, anon;
-grant select, insert on public.shared_spots to authenticated;
+grant select, insert, update on public.shared_spots to authenticated;
 
 -- 開啟 Realtime：新增資料要即時推播給所有使用者。重複執行不會報錯。
 do $$
