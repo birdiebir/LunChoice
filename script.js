@@ -1386,8 +1386,10 @@ function renderGroupMembers(data) {
     const canRemove = data.is_owner && m.user_id !== data.created_by;
     row.innerHTML = `
       <img class="group-member-avatar" src="${escapeHtml(m.avatar_url || AVATAR_FALLBACK)}" alt="">
-      <span class="group-member-name">${escapeHtml(m.nickname)}</span>
-      ${isSpinner ? '<span class="group-member-badge">🎯 今日轉盤人</span>' : ""}
+      <div class="group-member-info">
+        <span class="group-member-name">${escapeHtml(m.nickname)}</span>
+        ${isSpinner ? '<span class="group-member-badge">🎯 今日轉盤人</span>' : ""}
+      </div>
       ${canRemove ? `<button class="group-member-remove" type="button" aria-label="把 ${escapeHtml(m.nickname)} 移出群組">×</button>` : ""}
     `;
     const removeBtn = row.querySelector(".group-member-remove");

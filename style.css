@@ -537,33 +537,39 @@
   .group-detail-name { font-size: 18px; font-weight: 900; margin: 0; }
   .group-member-list { display: flex; flex-direction: column; gap: 8px; }
   .group-member-row {
-    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
-    border-radius: 10px; background: var(--surface-2);
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+    border-radius: var(--radius-md); background: var(--surface-2);
   }
   .group-member-avatar {
-    width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
+    width: 38px; height: 38px; border-radius: 50%; object-fit: cover;
     background: var(--chip-bg); border: 1.5px solid var(--line); flex: none;
   }
+  .group-member-info {
+    display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;
+  }
   .group-member-name {
-    font-size: 13.5px; font-weight: 700; flex: 1; min-width: 0;
+    font-size: 13.5px; font-weight: 700;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .group-member-badge {
+    align-self: flex-start;
     font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft);
     border-radius: var(--radius-pill); padding: 2px 9px; white-space: nowrap;
   }
   .group-member-remove {
-    background: none; border: none; color: var(--text-2); font-size: 16px; line-height: 1;
-    cursor: pointer; padding: 4px 7px; border-radius: var(--radius-sm); flex: none;
+    background: none; border: none; color: var(--text-2); font-size: 18px; line-height: 1;
+    cursor: pointer; padding: 6px 9px; border-radius: var(--radius-sm); flex: none;
   }
   .group-member-remove:hover { background: var(--surface); color: var(--action); }
-  .group-member-remove.confirm { color: var(--action); font-size: var(--fs-xs); font-weight: 700; padding: 4px 8px; }
+  .group-member-remove.confirm { color: var(--action); font-size: var(--fs-xs); font-weight: 700; padding: 6px 10px; }
+
   .group-add-member { display: flex; gap: 8px; }
   .group-add-member input { flex: 1; min-width: 0; }
   .group-add-member .btn { padding: 10px 14px; font-size: var(--fs-md); white-space: nowrap; }
   .group-today-result {
     font-size: var(--fs-md); background: var(--accent-soft); border-radius: var(--radius-md); padding: 10px 12px;
   }
+  #groupUseWheelBtn { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); }
 
   /* ── 轉盤上的廣告加轉提示 ── */
   .bonus-invite {
