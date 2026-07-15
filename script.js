@@ -499,8 +499,17 @@ function recomputeCatsInData() {
 }
 
 const avg = r => (r.price[0] + r.price[1]) / 2;
+
+/* 自訂出發點：只影響「預設轉盤」。共享轉盤的走路時間是使用者新增/編輯
+   當下自己存的值（對應各自貼的 Google Maps 網址），維持原樣不重算。 */
+let customOrigin = null; // [lat, lng] | null
+const walkMinutesFor = r =>
+  (state.wheelMode === "shared" || !customOrigin || !r.ll)
+    ? r.walk
+    : estimateWalkMinutes(r.ll[0], r.ll[1], customOrigin);
+
 const eligible = () => activeList().filter(r =>
-  avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat)
+  avg(r) <= state.budget && walkMinutesFor(r) <= state.walk && state.cats.has(r.cat)
 );
 
 /* ══════════ DOM ══════════ */
@@ -629,15 +638,15 @@ function renderChips() {
 function renderRoster() {
   const box = $("roster");
   box.innerHTML = "";
-  const sorted = [...activeList()].sort((a, b) => a.walk - b.walk || avg(a) - avg(b));
+  const sorted = [...activeList()].sort((a, b) => walkMinutesFor(a) - walkMinutesFor(b) || avg(a) - avg(b));
   for (const r of sorted) {
-    const inFilter = avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat);
+    const inFilter = avg(r) <= state.budget && walkMinutesFor(r) <= state.walk && state.cats.has(r.cat);
     const div = document.createElement("div");
     div.className = "r-row" + (!inFilter ? " skipped" : "");
     div.innerHTML = `
       ${state.wheelMode === "shared" ? '<button class="r-edit-btn" type="button" aria-label="編輯這筆資料">✎</button>' : ""}
       <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span></div>
-      <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${r.walk} 分</span><span>${escapeHtml(r.addr)}</span></div>
+      <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${walkMinutesFor(r)} 分</span><span>${escapeHtml(r.addr)}</span></div>
       ${r.note ? `<div class="r-note">${escapeHtml(r.note)}</div>` : ""}`;
     const editBtn = div.querySelector(".r-edit-btn");
     if (editBtn) editBtn.onclick = () => openEditSpotModal(r);
@@ -703,6 +712,7 @@ function syncWheelModeUI() {
   $("tabShared").classList.toggle("on", mode === "shared");
   $("tabShared").setAttribute("aria-selected", String(mode === "shared"));
   $("addSpotBtn").hidden = mode !== "shared";
+  $("originField").hidden = mode !== "default";
 }
 function setWheelMode(mode) {
   if (state.wheelMode === mode) return;
@@ -812,7 +822,7 @@ function showResult(r) {
   $("rBadges").innerHTML = `
     <span class="badge">${CAT_EMOJI[r.cat] || ""} ${r.cat}</span>
     <span class="badge money">NT$${r.price[0]}–${r.price[1]}</span>
-    <span class="badge">🚶 ${r.walk} 分鐘</span>`;
+    <span class="badge">🚶 ${walkMinutesFor(r)} 分鐘</span>`;
   $("rAddr").textContent = r.addr;
   $("rNote").textContent = r.note || "";
   $("rNote").style.display = r.note ? "" : "none";
@@ -860,6 +870,41 @@ $("walk").oninput = e => {
 };
 $("allCats").onclick = () => { allCatsInData.forEach(c => state.cats.add(c)); refresh(); };
 $("noCats").onclick = () => { state.cats.clear(); refresh(); };
+
+/* 自訂出發點：只是這次先試做的版本，用瀏覽器定位（Geolocation），
+   不存 localStorage——重新整理就回到預設出發點，避免帶著過期的舊定位。 */
+function setOriginMsg(text, kind) {
+  const m = $("originMsg");
+  m.textContent = text;
+  m.className = "origin-msg" + (kind ? " " + kind : "");
+}
+$("useMyLocationBtn").onclick = () => {
+  if (!navigator.geolocation) { setOriginMsg("這個瀏覽器不支援定位功能", "err"); return; }
+  $("useMyLocationBtn").disabled = true;
+  setOriginMsg("定位中…", "");
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      customOrigin = [pos.coords.latitude, pos.coords.longitude];
+      $("originOut").textContent = "目前位置";
+      $("resetOriginBtn").hidden = false;
+      $("useMyLocationBtn").disabled = false;
+      setOriginMsg("已套用目前位置，預設轉盤的走路時間跟著重算（直線距離估算，非實際路線）", "ok");
+      refresh();
+    },
+    () => {
+      $("useMyLocationBtn").disabled = false;
+      setOriginMsg("定位失敗，請確認瀏覽器/系統有允許這個網頁存取位置", "err");
+    },
+    { enableHighAccuracy: false, timeout: 10000 }
+  );
+};
+$("resetOriginBtn").onclick = () => {
+  customOrigin = null;
+  $("originOut").textContent = "基隆路一段 200 號";
+  $("resetOriginBtn").hidden = true;
+  setOriginMsg("走路時間會跟著重算，只影響預設轉盤（直線距離估算，非實際路線）；共享轉盤地點維持原本存的資料", "");
+  refresh();
+};
 $("spinBtn").onclick = spin;
 $("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
 $("closeModal").onclick = hideResult;
@@ -1026,10 +1071,10 @@ function setSpotMsg(text, kind) {
 
 /* 直線距離（Haversine）換算走路分鐘數，約 70 公尺/分鐘（含轉彎繞路的保守估計）。
    只是自動帶入時的參考值，不是實際路線時間，使用者送出前都可以手動改。 */
-function estimateWalkMinutes(lat, lng) {
+function estimateWalkMinutes(lat, lng, origin = ORIGIN_LL) {
   const R = 6371000;
   const toRad = d => d * Math.PI / 180;
-  const [oLat, oLng] = ORIGIN_LL;
+  const [oLat, oLng] = origin;
   const dLat = toRad(lat - oLat), dLng = toRad(lng - oLng);
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(oLat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
   const meters = 2 * R * Math.asin(Math.sqrt(a));

@@ -71,6 +71,15 @@
         </span>
       </div>
 
+      <div class="field" id="originField">
+        <label>出發點<output id="originOut">基隆路一段 200 號</output></label>
+        <div class="origin-actions">
+          <button id="useMyLocationBtn" type="button">📍 使用目前位置</button>
+          <button id="resetOriginBtn" type="button" hidden>恢復預設</button>
+        </div>
+        <div class="origin-msg" id="originMsg">走路時間會跟著重算，只影響預設轉盤（直線距離估算，非實際路線）；共享轉盤地點維持原本存的資料</div>
+      </div>
+
       <div class="field">
         <label for="budget">預算上限（人均）<output id="budgetOut">NT$500</output></label>
         <input type="range" id="budget" min="100" max="500" step="50" value="500">
