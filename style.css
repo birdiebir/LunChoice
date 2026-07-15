@@ -2,10 +2,10 @@
      設計系統 Design Tokens
      配色：藍白極簡風。--accent／--action 都在同一個藍色家族裡
      （--action 是主按鈕用的正藍，--accent 是輔助強調用的中藍），
-     搭大量白／淺灰藍留白，不再套用先前品牌參考素材的紫綠配色。
+     搭大量白／淺灰藍留白。只有亮色模式，不跟隨系統切換暗色。
      ══════════════════════════════════════════════════════════ */
   :root {
-    /* 顏色（亮色） */
+    /* 顏色 */
     --bg: #FFFFFF;
     --surface: #FFFFFF;
     --surface-2: #EEF3FA;
@@ -35,62 +35,6 @@
     --fs-md: 13px;
     --fs-base: 14px;
     --fs-lg: 15px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0B1220;
-      --surface: #131B2C;
-      --surface-2: #182238;
-      --text: #E7EEF9;
-      --text-2: #8FA1BC;
-      --line: #23304A;
-      --accent: #6FA1FF;
-      --accent-soft: #1C2A47;
-      --accent-ink: #0B1220;
-      --action: #4C8DFF;
-      --action-hover: #6FA1FF;
-      --action-ink: #0B1220;
-      --amber: #E0A54E;
-      --chip-bg: #182238;
-      --shadow: 0 10px 30px rgba(0, 0, 0, .35);
-      --shadow-lg: 0 18px 50px rgba(0, 0, 0, .5);
-    }
-  }
-  :root[data-theme="light"] {
-    --bg: #FFFFFF;
-    --surface: #FFFFFF;
-    --surface-2: #EEF3FA;
-    --text: #16233A;
-    --text-2: #5B6B80;
-    --line: #DCE6F2;
-    --accent: #2563EB;
-    --accent-soft: #E8F0FE;
-    --accent-ink: #FFFFFF;
-    --action: #2458D6;
-    --action-hover: #1D46B0;
-    --action-ink: #FFFFFF;
-    --amber: #E8A33D;
-    --chip-bg: #EEF3FA;
-    --shadow: 0 10px 30px rgba(37, 99, 235, .10);
-    --shadow-lg: 0 18px 50px rgba(37, 99, 235, .16);
-  }
-  :root[data-theme="dark"] {
-    --bg: #0B1220;
-    --surface: #131B2C;
-    --surface-2: #182238;
-    --text: #E7EEF9;
-    --text-2: #8FA1BC;
-    --line: #23304A;
-    --accent: #6FA1FF;
-    --accent-soft: #1C2A47;
-    --accent-ink: #0B1220;
-    --action: #4C8DFF;
-    --action-hover: #6FA1FF;
-    --action-ink: #0B1220;
-    --amber: #E0A54E;
-    --chip-bg: #182238;
-    --shadow: 0 10px 30px rgba(0, 0, 0, .35);
-    --shadow-lg: 0 18px 50px rgba(0, 0, 0, .5);
   }
 
   * { box-sizing: border-box; }
