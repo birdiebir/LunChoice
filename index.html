@@ -1123,6 +1123,7 @@ function animateSpin() {
       state.spinning = false;
       $("brand").classList.remove("spinning");
       refresh();   // 依登入狀態與剩餘次數重新決定按鈕是否可按
+      updateQuota();  // 轉盤停下後才決定是否顯示「看廣告多轉一次」，避免蓋住轉動畫面
       showResult(list[winner]);
     }
   }
@@ -1232,7 +1233,7 @@ function updateQuota() {
   badge.hidden = false;
   badge.textContent = `今天還可轉 ${left}/${auth.limit} 次`;
   badge.classList.toggle("spent", left <= 0);
-  adInvite.hidden = !(left <= 0 && auth.bonusAvailable);
+  adInvite.hidden = !(left <= 0 && auth.bonusAvailable) || state.spinning;
   if (left <= 0) flashOutOfSpins();
   else setHint(DEFAULT_HINT, false);
 }
