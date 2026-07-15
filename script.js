@@ -1119,6 +1119,11 @@ function updateAvatarThumb() {
   else { img.hidden = true; }
 }
 
+/* 右上角顯示暱稱，沒設暱稱就用 email 頂著（不能整個空白） */
+function updateWhoDisplay() {
+  $("who").textContent = myProfile.nickname || auth.user?.email || "已登入";
+}
+
 async function loadMyProfile() {
   if (!auth.user) return;
   try {
@@ -1127,6 +1132,7 @@ async function loadMyProfile() {
     if (!error && data) myProfile = data;
   } catch (e) {}
   updateAvatarThumb();
+  updateWhoDisplay();
 }
 
 function setProfileMsg(text, kind) {
@@ -1163,6 +1169,7 @@ function openProfileModal() {
   if (!auth.user) { openGate(); return; }
   $("profileVeil").classList.add("show");
   $("profileVeil").setAttribute("aria-hidden", "false");
+  $("profileEmail").textContent = auth.user.email || "";
   $("profileNickname").value = myProfile.nickname || "";
   $("profileAvatarPreview").src = myProfile.avatar_url || AVATAR_FALLBACK;
   $("profileAvatarInput").value = "";
@@ -1206,6 +1213,7 @@ $("profileSaveBtn").onclick = async () => {
     if (error) { setProfileMsg("儲存失敗：" + error.message, "err"); return; }
     myProfile = { nickname, avatar_url: avatarUrl };
     updateAvatarThumb();
+    updateWhoDisplay();
     setProfileMsg("已儲存！", "ok");
   } catch (e) {
     setProfileMsg("連線發生問題，請稍後再試", "err");
@@ -1501,7 +1509,7 @@ async function applySession(session) {
   if (auth.user) {
     closeGate();
     $("authBar").hidden = false;
-    $("who").textContent = auth.user.email || "已登入";
+    updateWhoDisplay();
     await fetchStatus();
     loadSharedSpots();
     subscribeSharedSpots();
