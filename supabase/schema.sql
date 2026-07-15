@@ -165,3 +165,54 @@ revoke all on function public.claim_bonus_spin()    from public, anon;
 grant execute on function public.record_spin(int)   to authenticated;
 grant execute on function public.spin_status(int)   to authenticated;
 grant execute on function public.claim_bonus_spin() to authenticated;
+
+-- ── shared_spots：全局共享轉盤名單，所有登入使用者共讀共寫 ──────
+-- 一開始是空的，任何人新增的地點會透過 Supabase Realtime 即時推播給
+-- 所有正在瀏覽的使用者（不用重新整理頁面）。刻意不開放 update/delete，
+-- 先求「大家一起加」，內容治理（檢舉、刪除）之後有需要再加。
+create table if not exists public.shared_spots (
+  id         bigint generated always as identity primary key,
+  name       text not null,
+  cat        text not null,
+  price_min  int not null default 0,
+  price_max  int not null default 0,
+  walk       int not null default 0,
+  addr       text not null default '',
+  note       text not null default '',
+  lat        double precision,
+  lng        double precision,
+  maps_url   text not null default '',
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint shared_spots_name_len check (char_length(trim(name)) > 0 and char_length(name) <= 80),
+  constraint shared_spots_walk_range check (walk >= 0 and walk <= 240),
+  constraint shared_spots_price_range check (price_min >= 0 and price_max >= price_min)
+);
+
+create index if not exists shared_spots_created_at_idx on public.shared_spots (created_at);
+
+alter table public.shared_spots enable row level security;
+
+-- 任何登入使用者都能讀取整份共享名單。
+drop policy if exists "read shared spots" on public.shared_spots;
+create policy "read shared spots" on public.shared_spots
+  for select using (auth.role() = 'authenticated');
+
+-- 任何登入使用者都能新增，但 created_by 必須是自己，避免冒名。
+drop policy if exists "insert own shared spot" on public.shared_spots;
+create policy "insert own shared spot" on public.shared_spots
+  for insert with check (auth.uid() = created_by);
+
+revoke all on public.shared_spots from public, anon;
+grant select, insert on public.shared_spots to authenticated;
+
+-- 開啟 Realtime：新增資料要即時推播給所有使用者。重複執行不會報錯。
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'shared_spots'
+  ) then
+    alter publication supabase_realtime add table public.shared_spots;
+  end if;
+end $$;

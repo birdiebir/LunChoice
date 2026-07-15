@@ -123,6 +123,25 @@
 
   /* ── wheel panel ── */
   .wheel-panel { padding: 26px 22px 30px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+
+  .wheel-tabs { display: flex; gap: 4px; background: var(--chip-bg); padding: 4px; border-radius: 999px; width: 100%; max-width: 360px; }
+  .wheel-tab {
+    flex: 1; border: none; background: transparent; padding: 9px 10px; border-radius: 999px;
+    font: inherit; font-size: 13.5px; font-weight: 700; color: var(--text-2); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 5px; transition: all .12s;
+  }
+  .wheel-tab.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .wheel-tab-count {
+    font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft);
+    border-radius: 999px; padding: 1px 7px; font-variant-numeric: tabular-nums;
+  }
+
+  .add-spot-btn {
+    border: 1.5px dashed var(--accent); background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 7px 16px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .add-spot-btn:hover { filter: brightness(1.04); }
+
   .match-count {
     font-size: 14px; color: var(--text-2); letter-spacing: 1px;
     display: flex; align-items: center; gap: 8px;
@@ -364,6 +383,45 @@
   .bonus-card .btn[disabled] { opacity: .45; cursor: progress; }
   @media (prefers-reduced-motion: reduce) { .gate-card { animation: none; } }
 
+  /* ── 共享轉盤：新增地點 ── */
+  .spot-veil {
+    position: fixed; inset: 0; z-index: 70; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(20, 16, 12, .6); backdrop-filter: blur(4px);
+  }
+  .spot-veil.show { display: flex; }
+  .spot-card {
+    background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg);
+    width: min(420px, 100%); max-height: 88vh; overflow-y: auto;
+    padding: 26px 24px; position: relative; text-align: left;
+    display: flex; flex-direction: column; gap: 12px;
+    animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+  }
+  .spot-card h2 { margin: 0; font-size: 19px; font-weight: 900; padding-right: 22px; }
+  .spot-card .close {
+    position: absolute; top: 10px; right: 12px; background: none; border: none;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px;
+  }
+  .spot-hint { margin: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
+  .spot-quick { display: flex; gap: 8px; }
+  .spot-quick input { flex: 1; min-width: 0; }
+  .spot-quick .btn { padding: 10px 14px; font-size: 13px; white-space: nowrap; }
+  .spot-quick-msg { font-size: 12px; color: var(--text-2); min-height: 16px; }
+  .spot-quick-msg.err { color: var(--action); }
+  .spot-quick-msg.ok { color: var(--accent); font-weight: 700; }
+  .spot-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--text-2); }
+  .spot-row { display: flex; gap: 10px; }
+  .spot-row .spot-field { flex: 1; }
+  .spot-card input, .spot-card select {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
+    font: inherit; font-size: 14px; background: var(--surface-2); color: var(--text); box-sizing: border-box;
+  }
+  .spot-card input:focus-visible, .spot-card select:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .spot-msg { font-size: 13px; min-height: 18px; }
+  .spot-msg.err { color: var(--action); }
+  .spot-msg.ok { color: var(--accent); font-weight: 700; }
+  .spot-card .btn[disabled] { opacity: .55; cursor: progress; }
+
   /* ── 轉盤上的廣告加轉提示 ── */
   .bonus-invite {
     position: absolute; inset: 0; z-index: 6; display: none;
@@ -391,12 +449,17 @@
 
   <main class="board">
     <section class="card wheel-panel" aria-label="轉輪">
+      <div class="wheel-tabs" role="tablist" aria-label="轉盤來源">
+        <button class="wheel-tab on" id="tabDefault" type="button" role="tab" aria-selected="true">預設轉盤</button>
+        <button class="wheel-tab" id="tabShared" type="button" role="tab" aria-selected="false">共享轉盤<span class="wheel-tab-count" id="sharedCount" hidden>0</span></button>
+      </div>
+      <button class="add-spot-btn" id="addSpotBtn" type="button" hidden>+ 新增地點到共享清單</button>
       <div class="match-count">今天可轉 <b id="count">0</b> 家</div>
       <div class="wheel-stage" id="stage">
         <div class="pointer" aria-hidden="true"></div>
         <canvas id="wheel" width="1000" height="1000" aria-label="午餐轉輪"></canvas>
         <button class="hub" id="spinBtn">轉！</button>
-        <div class="empty-note">沒有符合條件的店 😥<br>放寬一點預算或走路時間吧</div>
+        <div class="empty-note" id="emptyNote">沒有符合條件的店 😥<br>放寬一點預算或走路時間吧</div>
         <div class="bonus-invite" id="bonusInvite" hidden>
           <div class="bonus-invite-inner">
             <div class="bonus-invite-emoji">📺</div>
@@ -490,6 +553,50 @@
     </div>
     <div class="bonus-copy" id="bonusTitle">🏦 遠銀 Bankee — 數位帳戶新戶好禮天天抽</div>
     <div class="bonus-timer" id="bonusTimer">廣告播放中…</div>
+  </div>
+</div>
+
+<div class="spot-veil" id="spotVeil" aria-hidden="true">
+  <div class="spot-card" role="dialog" aria-modal="true" aria-labelledby="spotTitle">
+    <button class="close" id="spotCloseBtn" aria-label="關閉">×</button>
+    <h2 id="spotTitle">新增地點到共享清單</h2>
+    <p class="spot-hint">貼 Google Maps 網址可以自動帶入店名、經緯度、估算走路時間（直線距離換算，僅供參考）；價位跟類別 Google 網址裡沒有這些資料，麻煩手動選一下。</p>
+
+    <div class="spot-quick">
+      <input type="url" id="spotQuickUrl" placeholder="貼上 Google Maps 網址…">
+      <button class="btn btn-again" id="spotAutoFillBtn" type="button">自動帶入</button>
+    </div>
+    <div class="spot-quick-msg" id="spotQuickMsg"></div>
+
+    <label class="spot-field">
+      <span>店名</span>
+      <input type="text" id="spotName" maxlength="80" placeholder="店名">
+    </label>
+    <label class="spot-field">
+      <span>類別</span>
+      <select id="spotCat"></select>
+    </label>
+    <div class="spot-row">
+      <label class="spot-field">
+        <span>價位下限</span>
+        <input type="number" id="spotPriceMin" min="0" max="5000" step="10" placeholder="60">
+      </label>
+      <label class="spot-field">
+        <span>價位上限</span>
+        <input type="number" id="spotPriceMax" min="0" max="5000" step="10" placeholder="200">
+      </label>
+    </div>
+    <label class="spot-field">
+      <span>走路時間（分鐘）</span>
+      <input type="number" id="spotWalk" min="0" max="240" step="1" placeholder="5">
+    </label>
+    <label class="spot-field">
+      <span>Google Maps 網址</span>
+      <input type="url" id="spotMapsUrl" placeholder="https://maps.app.goo.gl/…">
+    </label>
+
+    <div class="spot-msg" id="spotMsg" role="status" aria-live="polite"></div>
+    <button class="btn btn-go" id="spotSubmitBtn" type="button">新增到共享清單</button>
   </div>
 </div>
 
@@ -931,12 +1038,13 @@ const CAT_EMOJI = {
 const CAT_ORDER = Object.keys(CAT_EMOJI);
 const PALETTE = ["#FFD6A5","#BDE3C9","#FDF3B6","#B8DDF5","#F5C6C6","#CBD9A8","#F5D9EF","#B9D8D2","#F3C088","#DED1F2"];
 const TEXT_ON_WHEEL = "#3A3226";
+const ORIGIN_LL = [25.0401, 121.5629]; // 基隆路一段 200 號附近，估算走路時間用（近似值）
 
 /* ══════════ 狀態 ══════════ */
 const todayKey = new Date().toISOString().slice(0, 10);
 let store = {};
 try { store = JSON.parse(localStorage.getItem("lunch-wheel-v2") || "{}"); } catch (e) {}
-const allCatsInData = [...new Set(RESTAURANTS.map(r => r.cat))]
+let allCatsInData = [...new Set(RESTAURANTS.map(r => r.cat))]
   .sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
 
 const state = {
@@ -944,6 +1052,7 @@ const state = {
   walk: store.walk ?? 10,
   cats: new Set(Array.isArray(store.cats) ? store.cats.filter(c => allCatsInData.includes(c)) : allCatsInData),
   skipped: new Set(store.skipDate === todayKey && Array.isArray(store.skipped) ? store.skipped : []),
+  wheelMode: store.wheelMode === "shared" ? "shared" : "default",
   rot: -Math.PI / 2,
   spinning: false
 };
@@ -953,13 +1062,26 @@ function persist() {
   try {
     localStorage.setItem("lunch-wheel-v2", JSON.stringify({
       budget: state.budget, walk: state.walk, cats: [...state.cats],
-      skipped: [...state.skipped], skipDate: todayKey
+      skipped: [...state.skipped], skipDate: todayKey, wheelMode: state.wheelMode
     }));
   } catch (e) {}
 }
 
+/* ══════════ 共享轉盤：資料來源 ══════════ */
+let sharedSpots = [];
+
+function activeList() { return state.wheelMode === "shared" ? sharedSpots : RESTAURANTS; }
+
+function recomputeCatsInData() {
+  allCatsInData = [...new Set(activeList().map(r => r.cat))]
+    .sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
+  const kept = new Set([...state.cats].filter(c => allCatsInData.includes(c)));
+  if (kept.size === 0) allCatsInData.forEach(c => kept.add(c));
+  state.cats = kept;
+}
+
 const avg = r => (r.price[0] + r.price[1]) / 2;
-const eligible = () => RESTAURANTS.filter(r =>
+const eligible = () => activeList().filter(r =>
   avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat) && !state.skipped.has(r.name)
 );
 
@@ -1020,6 +1142,9 @@ function refresh() {
   currentList = eligible();
   $("count").textContent = currentList.length;
   $("stage").classList.toggle("empty", currentList.length === 0);
+  $("emptyNote").innerHTML = (state.wheelMode === "shared" && sharedSpots.length === 0)
+    ? "共享清單還是空的 🌱<br>來新增第一家吧"
+    : "沒有符合條件的店 😥<br>放寬一點預算或走路時間吧";
   $("spinBtn").disabled =
     currentList.length === 0 || state.spinning || auth.busy || !auth.user || outOfSpins();
   drawWheel(currentList);
@@ -1033,7 +1158,7 @@ function renderChips() {
   const box = $("chips");
   box.innerHTML = "";
   for (const cat of allCatsInData) {
-    const count = RESTAURANTS.filter(r => r.cat === cat).length;
+    const count = activeList().filter(r => r.cat === cat).length;
     const b = document.createElement("button");
     b.className = "chip" + (state.cats.has(cat) ? " on" : "");
     b.innerHTML = `${CAT_EMOJI[cat] || "🍽️"} ${cat}<span class="n">${count}</span>`;
@@ -1048,7 +1173,7 @@ function renderChips() {
 function renderRoster() {
   const box = $("roster");
   box.innerHTML = "";
-  const sorted = [...RESTAURANTS].sort((a, b) => a.walk - b.walk || avg(a) - avg(b));
+  const sorted = [...activeList()].sort((a, b) => a.walk - b.walk || avg(a) - avg(b));
   for (const r of sorted) {
     const inFilter = avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat);
     const skipped = state.skipped.has(r.name);
@@ -1069,6 +1194,67 @@ function renderSkipNote() {
   $("skipNote").hidden = state.skipped.size === 0;
   $("skipCount").textContent = state.skipped.size;
 }
+
+/* ══════════ 共享轉盤：切換頁籤、載入、即時同步 ══════════ */
+function mapSharedRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    cat: row.cat,
+    price: [row.price_min, row.price_max],
+    walk: row.walk,
+    addr: row.addr || "",
+    note: row.note || "",
+    ll: (row.lat != null && row.lng != null) ? [row.lat, row.lng] : null
+  };
+}
+
+function updateSharedCountBadge() {
+  const badge = $("sharedCount");
+  badge.hidden = sharedSpots.length === 0;
+  badge.textContent = sharedSpots.length;
+}
+
+async function loadSharedSpots() {
+  try {
+    const { data, error } = await supabase
+      .from("shared_spots").select("*").order("created_at", { ascending: true });
+    if (!error && data) sharedSpots = data.map(mapSharedRow);
+  } catch (e) {}
+  updateSharedCountBadge();
+  if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
+}
+
+let sharedChannel = null;
+function subscribeSharedSpots() {
+  if (sharedChannel) return;
+  sharedChannel = supabase.channel("shared_spots_changes")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "shared_spots" }, payload => {
+      if (sharedSpots.some(s => s.id === payload.new.id)) return;
+      sharedSpots.push(mapSharedRow(payload.new));
+      updateSharedCountBadge();
+      if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
+    })
+    .subscribe();
+}
+
+function syncWheelModeUI() {
+  const mode = state.wheelMode;
+  $("tabDefault").classList.toggle("on", mode === "default");
+  $("tabDefault").setAttribute("aria-selected", String(mode === "default"));
+  $("tabShared").classList.toggle("on", mode === "shared");
+  $("tabShared").setAttribute("aria-selected", String(mode === "shared"));
+  $("addSpotBtn").hidden = mode !== "shared";
+}
+function setWheelMode(mode) {
+  if (state.wheelMode === mode) return;
+  state.wheelMode = mode;
+  syncWheelModeUI();
+  recomputeCatsInData();
+  refresh();
+}
+$("tabDefault").onclick = () => setWheelMode("default");
+$("tabShared").onclick = () => setWheelMode("shared");
 
 /* ══════════ 轉動 ══════════ */
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1211,7 +1397,7 @@ $("rSkip").onclick = () => {
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { hideResult(); closeBonusModal(); }
+  if (e.key === "Escape") { hideResult(); closeBonusModal(); closeSpotModal(); }
   if (e.code === "Space"
       && !$("veil").classList.contains("show")
       && !$("gate").classList.contains("show")
@@ -1313,6 +1499,122 @@ $("bonusWatchBtn").onclick = openBonusModal;
 $("bonusCloseBtn").onclick = claimAndCloseBonusModal;
 $("bonusVeil").onclick = e => { if (e.target === $("bonusVeil")) closeBonusModal(); };
 
+/* ── 共享轉盤：新增地點表單 ── */
+$("spotCat").innerHTML = CAT_ORDER.map(c => `<option value="${c}">${CAT_EMOJI[c] || ""} ${c}</option>`).join("");
+
+let spotParsedLatLng = null; // 自動帶入解析到的經緯度，跟著表單一起送出
+
+function openSpotModal() {
+  if (!auth.user) { openGate(); return; }
+  $("spotVeil").classList.add("show");
+  $("spotVeil").setAttribute("aria-hidden", "false");
+}
+function closeSpotModal() {
+  $("spotVeil").classList.remove("show");
+  $("spotVeil").setAttribute("aria-hidden", "true");
+}
+function resetSpotForm() {
+  $("spotQuickUrl").value = "";
+  $("spotQuickMsg").textContent = "";
+  $("spotQuickMsg").className = "spot-quick-msg";
+  $("spotName").value = "";
+  $("spotCat").selectedIndex = 0;
+  $("spotPriceMin").value = "";
+  $("spotPriceMax").value = "";
+  $("spotWalk").value = "";
+  $("spotMapsUrl").value = "";
+  setSpotMsg("", "");
+  spotParsedLatLng = null;
+}
+function setSpotMsg(text, kind) {
+  const m = $("spotMsg");
+  m.textContent = text;
+  m.className = "spot-msg" + (kind ? " " + kind : "");
+}
+
+/* 直線距離（Haversine）換算走路分鐘數，約 70 公尺/分鐘（含轉彎繞路的保守估計）。
+   只是自動帶入時的參考值，不是實際路線時間，使用者送出前都可以手動改。 */
+function estimateWalkMinutes(lat, lng) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const [oLat, oLng] = ORIGIN_LL;
+  const dLat = toRad(lat - oLat), dLng = toRad(lng - oLng);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(oLat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
+  const meters = 2 * R * Math.asin(Math.sqrt(a));
+  return Math.max(1, Math.round(meters / 70));
+}
+
+$("addSpotBtn").onclick = openSpotModal;
+$("spotCloseBtn").onclick = closeSpotModal;
+$("spotVeil").onclick = e => { if (e.target === $("spotVeil")) closeSpotModal(); };
+
+$("spotAutoFillBtn").onclick = async () => {
+  const url = $("spotQuickUrl").value.trim();
+  const msg = $("spotQuickMsg");
+  if (!url) { msg.textContent = "先貼網址再按自動帶入"; msg.className = "spot-quick-msg err"; return; }
+  msg.textContent = "解析中…"; msg.className = "spot-quick-msg";
+  $("spotAutoFillBtn").disabled = true;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/resolve-maps-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "apikey": SUPABASE_ANON_KEY },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (!data.ok) { msg.textContent = "網址解析失敗，麻煩手動填寫"; msg.className = "spot-quick-msg err"; return; }
+    $("spotMapsUrl").value = data.resolvedUrl || url;
+    if (data.name) $("spotName").value = data.name;
+    if (data.lat != null && data.lng != null) {
+      spotParsedLatLng = [data.lat, data.lng];
+      $("spotWalk").value = estimateWalkMinutes(data.lat, data.lng);
+      msg.textContent = "已帶入店名／估算走路時間（直線距離估算，可自行調整）；價位跟類別請手動選";
+      msg.className = "spot-quick-msg ok";
+    } else {
+      spotParsedLatLng = null;
+      msg.textContent = data.name ? "已帶入店名，經緯度抓不到、走路時間麻煩手動填" : "這個網址抓不到店名／座標，麻煩手動填寫";
+      msg.className = "spot-quick-msg err";
+    }
+  } catch (e) {
+    msg.textContent = "連線發生問題，麻煩手動填寫";
+    msg.className = "spot-quick-msg err";
+  } finally {
+    $("spotAutoFillBtn").disabled = false;
+  }
+};
+
+$("spotSubmitBtn").onclick = async () => {
+  if (!auth.user) { openGate(); return; }
+  const name = $("spotName").value.trim();
+  const cat = $("spotCat").value;
+  const priceMin = Math.max(0, Math.round(+$("spotPriceMin").value || 0));
+  const priceMax = Math.max(priceMin, Math.round(+$("spotPriceMax").value || priceMin));
+  const walk = Math.max(0, Math.round(+$("spotWalk").value || 0));
+  const mapsUrl = $("spotMapsUrl").value.trim();
+
+  if (!name) { setSpotMsg("請填店名", "err"); return; }
+
+  $("spotSubmitBtn").disabled = true;
+  setSpotMsg("送出中…", "");
+  try {
+    const payload = {
+      name, cat, price_min: priceMin, price_max: priceMax, walk,
+      maps_url: mapsUrl, created_by: auth.user.id
+    };
+    if (spotParsedLatLng) { payload.lat = spotParsedLatLng[0]; payload.lng = spotParsedLatLng[1]; }
+    const { error } = await supabase.from("shared_spots").insert(payload);
+    if (error) { setSpotMsg("新增失敗：" + error.message, "err"); return; }
+    setSpotMsg("新增成功！", "ok");
+    resetSpotForm();
+    setTimeout(closeSpotModal, 700);
+  } catch (e) {
+    setSpotMsg("連線發生問題，請稍後再試", "err");
+  } finally {
+    $("spotSubmitBtn").disabled = false;
+  }
+};
+
 /* ── 登入視窗 ── */
 function openGate() {
   if (auth.user) return;
@@ -1336,6 +1638,8 @@ async function applySession(session) {
     $("authBar").hidden = false;
     $("who").textContent = auth.user.email || "已登入";
     await fetchStatus();
+    loadSharedSpots();
+    subscribeSharedSpots();
   } else {
     auth.remaining = null;
     $("authBar").hidden = true;
@@ -1382,6 +1686,8 @@ $("budget").value = state.budget;
 $("budgetOut").textContent = "NT$" + state.budget;
 $("walk").value = state.walk;
 $("walkOut").textContent = state.walk + " 分鐘";
+syncWheelModeUI();
+recomputeCatsInData();
 refresh();
 
 /* 啟動 Supabase 登入流程 */
