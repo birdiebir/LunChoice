@@ -869,7 +869,6 @@ $("walk").oninput = e => {
   refresh();
 };
 $("allCats").onclick = () => { allCatsInData.forEach(c => state.cats.add(c)); refresh(); };
-$("noCats").onclick = () => { state.cats.clear(); refresh(); };
 
 /* 自訂出發點：只是這次先試做的版本，用瀏覽器定位（Geolocation），
    不存 localStorage——重新整理就回到預設出發點，避免帶著過期的舊定位。 */
