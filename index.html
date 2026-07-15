@@ -59,7 +59,7 @@
           </div>
         </div>
       </div>
-      <div class="hint" id="hint">按中間的「轉！」或按空白鍵，午餐就交給命運<br>店家超過 36 家時輪面不顯示店名，轉到誰看結果卡揭曉</div>
+      <div class="hint" id="hint"></div>
     </section>
 
     <aside class="card slip" aria-label="今日條件">
@@ -80,15 +80,12 @@
       <div>
         <div class="cats-head">
           <span>想吃的類別</span>
-          <span>
-            <button id="allCats">全選</button>·<button id="noCats">清空</button>
+          <span class="cats-head-actions">
+            <button id="allCats" class="cats-all-btn" type="button">全選</button>
+            <button id="noCats" type="button">清空</button>
           </span>
         </div>
         <div class="chips" id="chips"></div>
-      </div>
-
-      <div class="skip-note" id="skipNote" hidden>
-        今天已跳過 <b id="skipCount">0</b> 家 · <button id="clearSkips">全部恢復</button>
       </div>
     </aside>
   </main>
@@ -115,7 +112,6 @@
       <div class="actions">
         <a class="btn btn-go" id="rMap" target="_blank" rel="noopener">🗺️ 開 Google 地圖出發</a>
         <button class="btn btn-again" id="rAgain">手滑了，再轉一次</button>
-        <button class="btn btn-skip" id="rSkip">今天不想吃這家，跳過它再轉</button>
       </div>
     </div>
   </div>

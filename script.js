@@ -460,7 +460,6 @@ const ORIGIN_LL = [25.0401, 121.5629]; // 基隆路一段 200 號附近，估算
 const AVATAR_FALLBACK = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" rx="20" fill="%23D8D2C4"/><text x="20" y="26" font-size="18" text-anchor="middle" fill="%23FFFFFF">🍚</text></svg>';
 
 /* ══════════ 狀態 ══════════ */
-const todayKey = new Date().toISOString().slice(0, 10);
 let store = {};
 try { store = JSON.parse(localStorage.getItem("lunch-wheel-v2") || "{}"); } catch (e) {}
 let allCatsInData = [...new Set(RESTAURANTS.map(r => r.cat))]
@@ -472,7 +471,6 @@ const state = {
   budget: Math.min(500, Math.max(100, store.budget ?? 500)),
   walk: store.walk ?? 10,
   cats: new Set(Array.isArray(store.cats) ? store.cats.filter(c => allCatsInData.includes(c)) : allCatsInData),
-  skipped: new Set(store.skipDate === todayKey && Array.isArray(store.skipped) ? store.skipped : []),
   wheelMode: store.wheelMode === "shared" ? "shared" : "default",
   rot: -Math.PI / 2,
   spinning: false
@@ -482,8 +480,7 @@ if (state.cats.size === 0 && !Array.isArray(store.cats)) allCatsInData.forEach(c
 function persist() {
   try {
     localStorage.setItem("lunch-wheel-v2", JSON.stringify({
-      budget: state.budget, walk: state.walk, cats: [...state.cats],
-      skipped: [...state.skipped], skipDate: todayKey, wheelMode: state.wheelMode
+      budget: state.budget, walk: state.walk, cats: [...state.cats], wheelMode: state.wheelMode
     }));
   } catch (e) {}
 }
@@ -503,7 +500,7 @@ function recomputeCatsInData() {
 
 const avg = r => (r.price[0] + r.price[1]) / 2;
 const eligible = () => activeList().filter(r =>
-  avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat) && !state.skipped.has(r.name)
+  avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat)
 );
 
 /* ══════════ DOM ══════════ */
@@ -610,7 +607,6 @@ function refresh() {
   drawWheel(currentList);
   renderChips();
   renderRoster();
-  renderSkipNote();
   persist();
 }
 
@@ -636,26 +632,17 @@ function renderRoster() {
   const sorted = [...activeList()].sort((a, b) => a.walk - b.walk || avg(a) - avg(b));
   for (const r of sorted) {
     const inFilter = avg(r) <= state.budget && r.walk <= state.walk && state.cats.has(r.cat);
-    const skipped = state.skipped.has(r.name);
     const div = document.createElement("div");
-    div.className = "r-row" + (skipped || !inFilter ? " skipped" : "");
+    div.className = "r-row" + (!inFilter ? " skipped" : "");
     div.innerHTML = `
       ${state.wheelMode === "shared" ? '<button class="r-edit-btn" type="button" aria-label="編輯這筆資料">✎</button>' : ""}
-      <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span>
-        ${skipped ? '<button class="unskip">恢復</button>' : ""}</div>
+      <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span></div>
       <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${r.walk} 分</span><span>${escapeHtml(r.addr)}</span></div>
       ${r.note ? `<div class="r-note">${escapeHtml(r.note)}</div>` : ""}`;
-    const un = div.querySelector(".unskip");
-    if (un) un.onclick = () => { state.skipped.delete(r.name); refresh(); };
     const editBtn = div.querySelector(".r-edit-btn");
     if (editBtn) editBtn.onclick = () => openEditSpotModal(r);
     box.appendChild(div);
   }
-}
-
-function renderSkipNote() {
-  $("skipNote").hidden = state.skipped.size === 0;
-  $("skipCount").textContent = state.skipped.size;
 }
 
 /* ══════════ 共享轉盤：切換頁籤、載入、即時同步 ══════════ */
@@ -821,9 +808,7 @@ async function recordSpinOutcome(winner, spinId) {
 }
 
 /* ══════════ 結果 ══════════ */
-let lastWinner = null;
 function showResult(r) {
-  lastWinner = r;
   $("rTitle").textContent = r.name;
   $("rBadges").innerHTML = `
     <span class="badge">${CAT_EMOJI[r.cat] || ""} ${r.cat}</span>
@@ -876,15 +861,8 @@ $("walk").oninput = e => {
 };
 $("allCats").onclick = () => { allCatsInData.forEach(c => state.cats.add(c)); refresh(); };
 $("noCats").onclick = () => { state.cats.clear(); refresh(); };
-$("clearSkips").onclick = () => { state.skipped.clear(); refresh(); };
 $("spinBtn").onclick = spin;
 $("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
-$("rSkip").onclick = () => {
-  if (lastWinner) state.skipped.add(lastWinner.name);
-  hideResult();
-  refresh();
-  if (eligible().length > 0) setTimeout(spin, 250);
-};
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
