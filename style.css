@@ -193,17 +193,19 @@
 
   .cats-head { display: flex; justify-content: space-between; align-items: center; }
   .cats-head > span:first-child { font-size: var(--fs-base); font-weight: 700; }
-  .cats-head-actions { display: flex; align-items: center; gap: 10px; }
-  .cats-head button {
-    background: none; border: none; color: var(--accent); font: inherit; font-size: var(--fs-sm);
-    cursor: pointer; padding: 2px 4px;
+  .cats-head-actions { display: flex; align-items: center; gap: 8px; }
+  .cats-head-actions button {
+    font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer;
+    border-radius: var(--radius-pill); padding: 5px 14px; transition: filter .12s, background .12s;
   }
-  .cats-head button.cats-all-btn {
-    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: var(--fs-xs);
-    border-radius: var(--radius-pill); padding: 5px 14px;
-    transition: filter .12s;
+  .cats-head-actions .cats-all-btn {
+    border: 1.5px solid var(--accent); background: var(--accent); color: var(--accent-ink);
   }
-  .cats-head button.cats-all-btn:hover { filter: brightness(1.08); }
+  .cats-head-actions .cats-all-btn:hover { filter: brightness(1.08); }
+  .cats-head-actions #noCats {
+    border: 1.5px solid var(--line); background: none; color: var(--accent);
+  }
+  .cats-head-actions #noCats:hover { background: var(--accent-soft); border-color: var(--accent); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .chip {
     border: 1.5px solid var(--line); background: var(--surface-2); color: var(--text-2);
