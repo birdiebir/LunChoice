@@ -18,6 +18,11 @@ create table if not exists public.spins (
   spin_day date        not null default (now() at time zone 'Asia/Taipei')::date
 );
 
+-- winner_name／wheel_mode：轉盤動畫跑完、知道轉到誰之後，前端再呼叫
+-- set_spin_result() 回填，讓「個人轉盤紀錄」查得到日期跟轉到的項目。
+alter table public.spins add column if not exists winner_name text;
+alter table public.spins add column if not exists wheel_mode  text not null default 'default';
+
 create index if not exists spins_user_day_idx on public.spins (user_id, spin_day);
 
 -- ── RLS：使用者只能讀自己的紀錄，且不能自行 insert/update/delete ──
@@ -79,6 +84,7 @@ end;
 $$;
 
 -- ── record_spin：登記一次轉盤（超過上限會被擋下，含廣告加轉額度）
+-- 回傳的 spin_id 給前端在動畫跑完後呼叫 set_spin_result() 回填轉到誰。
 create or replace function public.record_spin(p_limit int default 3)
 returns json
 language plpgsql
@@ -86,11 +92,12 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid   uuid := auth.uid();
-  v_day   date := (now() at time zone 'Asia/Taipei')::date;
-  v_used  int;
-  v_bonus int;
-  v_limit int;
+  v_uid     uuid := auth.uid();
+  v_day     date := (now() at time zone 'Asia/Taipei')::date;
+  v_used    int;
+  v_bonus   int;
+  v_limit   int;
+  v_spin_id bigint;
 begin
   if v_uid is null then
     return json_build_object('ok', false, 'error', 'not_authenticated');
@@ -115,11 +122,37 @@ begin
       'used', v_used, 'limit', v_limit, 'remaining', 0);
   end if;
 
-  insert into public.spins (user_id, spin_day) values (v_uid, v_day);
+  insert into public.spins (user_id, spin_day) values (v_uid, v_day) returning id into v_spin_id;
 
   return json_build_object(
-    'ok', true,
+    'ok', true, 'spin_id', v_spin_id,
     'used', v_used + 1, 'limit', v_limit, 'remaining', v_limit - (v_used + 1));
+end;
+$$;
+
+-- ── set_spin_result：轉盤動畫結束後回填「轉到誰」，只能設定自己名下
+--    還沒填過的那一筆，避免竄改別人或重複覆蓋 ──────────────────
+create or replace function public.set_spin_result(p_spin_id bigint, p_winner_name text, p_wheel_mode text default 'default')
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_n   int;
+begin
+  if v_uid is null then
+    return json_build_object('ok', false, 'error', 'not_authenticated');
+  end if;
+
+  update public.spins
+     set winner_name = left(p_winner_name, 120),
+         wheel_mode  = coalesce(nullif(trim(p_wheel_mode), ''), 'default')
+   where id = p_spin_id and user_id = v_uid and winner_name is null;
+
+  get diagnostics v_n = row_count;
+  return json_build_object('ok', v_n > 0);
 end;
 $$;
 
@@ -159,12 +192,14 @@ end;
 $$;
 
 -- ── 授權：只有登入使用者可呼叫，anon 不行 ─────────────────────
-revoke all on function public.record_spin(int)     from public, anon;
-revoke all on function public.spin_status(int)      from public, anon;
-revoke all on function public.claim_bonus_spin()    from public, anon;
-grant execute on function public.record_spin(int)   to authenticated;
-grant execute on function public.spin_status(int)   to authenticated;
-grant execute on function public.claim_bonus_spin() to authenticated;
+revoke all on function public.record_spin(int)              from public, anon;
+revoke all on function public.spin_status(int)               from public, anon;
+revoke all on function public.claim_bonus_spin()             from public, anon;
+revoke all on function public.set_spin_result(bigint, text, text) from public, anon;
+grant execute on function public.record_spin(int)            to authenticated;
+grant execute on function public.spin_status(int)             to authenticated;
+grant execute on function public.claim_bonus_spin()           to authenticated;
+grant execute on function public.set_spin_result(bigint, text, text) to authenticated;
 
 -- ── shared_spots：全局共享轉盤名單，所有登入使用者共讀共寫 ──────
 -- 一開始是空的，任何人新增的地點會透過 Supabase Realtime 即時推播給
@@ -214,5 +249,317 @@ begin
      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'shared_spots'
   ) then
     alter publication supabase_realtime add table public.shared_spots;
+  end if;
+end $$;
+
+-- 防禦性補強：cat 原本只靠前端 <select> 限制選項，直接呼叫 API 還是能塞任意字串，
+-- 而畫面上分類清單是用 innerHTML 組出來的，等於留了一個 XSS 縫。用 CHECK 把
+-- 後端也鎖在同一份分類清單上（前端逃逸也一樣會擋，屬於防禦性補強，非唯一防線）。
+alter table public.shared_spots drop constraint if exists shared_spots_cat_whitelist;
+alter table public.shared_spots add constraint shared_spots_cat_whitelist
+  check (cat in ('麵食','飯食便當','日式','韓式','東南亞','西式','台式小吃','健康餐盒','鍋物','咖啡輕食','其他'));
+
+-- ════════════════════════════════════════════════════════════════
+--  個人檔案 ／ 飯搭子圈
+-- ════════════════════════════════════════════════════════════════
+
+-- ── profiles：暱稱與大頭照，跟 auth.users 一對一 ──────────────
+create table if not exists public.profiles (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  nickname   text,
+  avatar_url text,
+  updated_at timestamptz not null default now(),
+  constraint profiles_nickname_len check (nickname is null or char_length(nickname) <= 40)
+);
+
+alter table public.profiles enable row level security;
+
+drop policy if exists "read all profiles" on public.profiles;
+create policy "read all profiles" on public.profiles
+  for select using (auth.role() = 'authenticated');
+
+drop policy if exists "insert own profile" on public.profiles;
+create policy "insert own profile" on public.profiles
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "update own profile" on public.profiles;
+create policy "update own profile" on public.profiles
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+revoke all on public.profiles from public, anon;
+grant select, insert, update on public.profiles to authenticated;
+
+-- ── avatars storage bucket：公開讀取，只能寫自己 {user_id}/ 底下的檔案 ──
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 2097152, array['image/jpeg','image/png','image/webp','image/gif'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "avatar public read" on storage.objects;
+create policy "avatar public read" on storage.objects
+  for select using (bucket_id = 'avatars');
+
+drop policy if exists "avatar owner upload" on storage.objects;
+create policy "avatar owner upload" on storage.objects
+  for insert with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "avatar owner update" on storage.objects;
+create policy "avatar owner update" on storage.objects
+  for update using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "avatar owner delete" on storage.objects;
+create policy "avatar owner delete" on storage.objects
+  for delete using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ── meal_groups / group_members：飯搭子圈 ─────────────────────
+create table if not exists public.meal_groups (
+  id         bigint generated always as identity primary key,
+  name       text not null,
+  created_by uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint meal_groups_name_len check (char_length(trim(name)) > 0 and char_length(name) <= 60)
+);
+
+create table if not exists public.group_members (
+  group_id  bigint not null references public.meal_groups(id) on delete cascade,
+  user_id   uuid not null references auth.users(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (group_id, user_id)
+);
+
+alter table public.meal_groups enable row level security;
+drop policy if exists "members can read their groups" on public.meal_groups;
+create policy "members can read their groups" on public.meal_groups
+  for select using (exists (
+    select 1 from public.group_members gm where gm.group_id = id and gm.user_id = auth.uid()
+  ));
+revoke all on public.meal_groups from public, anon;
+grant select on public.meal_groups to authenticated;
+
+alter table public.group_members enable row level security;
+drop policy if exists "members can read group roster" on public.group_members;
+create policy "members can read group roster" on public.group_members
+  for select using (exists (
+    select 1 from public.group_members gm2
+     where gm2.group_id = group_members.group_id and gm2.user_id = auth.uid()
+  ));
+revoke all on public.group_members from public, anon;
+grant select on public.group_members to authenticated;
+-- 刻意不開放直接 insert：新增成員只能透過下面的函式，才能檢查權限跟目標帳號存在。
+
+-- ── create_group：建立群組，建立者自動成為第一個成員 ──────────
+create or replace function public.create_group(p_name text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_id  bigint;
+begin
+  if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
+  if coalesce(trim(p_name), '') = '' then return json_build_object('ok', false, 'error', 'empty_name'); end if;
+
+  insert into public.meal_groups (name, created_by) values (trim(p_name), v_uid) returning id into v_id;
+  insert into public.group_members (group_id, user_id) values (v_id, v_uid);
+
+  return json_build_object('ok', true, 'group_id', v_id);
+end;
+$$;
+
+-- ── add_group_member_by_email：輸入 email 直接加入名單──────────
+-- 只有群組成員能加人；輸入的 email 要是已註冊帳號才加得進去（不寄信、不產生邀請連結）。
+create or replace function public.add_group_member_by_email(p_group_id bigint, p_email text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid       uuid := auth.uid();
+  v_is_member boolean;
+  v_target    uuid;
+begin
+  if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
+
+  select exists(select 1 from public.group_members where group_id = p_group_id and user_id = v_uid)
+    into v_is_member;
+  if not v_is_member then return json_build_object('ok', false, 'error', 'not_a_member'); end if;
+
+  select id into v_target from auth.users where lower(email) = lower(trim(p_email));
+  if v_target is null then return json_build_object('ok', false, 'error', 'user_not_found'); end if;
+
+  insert into public.group_members (group_id, user_id) values (p_group_id, v_target)
+  on conflict (group_id, user_id) do nothing;
+
+  return json_build_object('ok', true, 'user_id', v_target);
+end;
+$$;
+
+revoke all on function public.create_group(text) from public, anon;
+revoke all on function public.add_group_member_by_email(bigint, text) from public, anon;
+grant execute on function public.create_group(text) to authenticated;
+grant execute on function public.add_group_member_by_email(bigint, text) to authenticated;
+
+-- ── group_spin_results：每天的轉盤結果，廣播給全組看 ───────────
+create table if not exists public.group_spin_results (
+  id          bigint generated always as identity primary key,
+  group_id    bigint not null references public.meal_groups(id) on delete cascade,
+  spin_day    date not null default (now() at time zone 'Asia/Taipei')::date,
+  spinner_id  uuid not null references auth.users(id) on delete cascade,
+  winner_name text not null,
+  wheel_mode  text not null default 'default',
+  created_at  timestamptz not null default now(),
+  unique (group_id, spin_day)
+);
+
+alter table public.group_spin_results enable row level security;
+drop policy if exists "members can read group results" on public.group_spin_results;
+create policy "members can read group results" on public.group_spin_results
+  for select using (exists (
+    select 1 from public.group_members gm
+     where gm.group_id = group_spin_results.group_id and gm.user_id = auth.uid()
+  ));
+revoke all on public.group_spin_results from public, anon;
+grant select on public.group_spin_results to authenticated;
+-- 刻意不開放直接 insert：只能透過 record_group_result()，內部會檢查是不是輪到你。
+
+-- ── my_groups：我所屬的所有群組 ─────────────────────────────
+create or replace function public.my_groups()
+returns json
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(json_agg(json_build_object(
+           'group_id', g.id, 'name', g.name,
+           'member_count', (select count(*) from public.group_members gm2 where gm2.group_id = g.id)
+         ) order by g.created_at), '[]'::json)
+    from public.meal_groups g
+    join public.group_members gm on gm.group_id = g.id and gm.user_id = auth.uid();
+$$;
+revoke all on function public.my_groups() from public, anon;
+grant execute on function public.my_groups() to authenticated;
+
+-- ── group_daily_spinner：依加入順序，用「日期序號 mod 人數」輪值 ──
+-- 不用 cron：每次呼叫都是當下即算，今天算出來的人全天都一樣，
+-- 過了台北時區的午夜自然換下一個，伺服器重開機、離線都不影響正確性。
+create or replace function public.group_daily_spinner(p_group_id bigint)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select user_id
+    from (
+      select user_id, (row_number() over (order by joined_at) - 1) as idx,
+             count(*) over () as cnt
+        from public.group_members
+       where group_id = p_group_id
+    ) m
+   where cnt > 0
+     and idx = mod(
+       (extract(epoch from (now() at time zone 'Asia/Taipei')::date)::bigint / 86400),
+       cnt
+     )
+$$;
+revoke all on function public.group_daily_spinner(bigint) from public, anon;
+grant execute on function public.group_daily_spinner(bigint) to authenticated;
+
+-- ── group_status：群組頁一次拿到成員名單／今日轉盤人／今日結果 ──
+create or replace function public.group_status(p_group_id bigint)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid       uuid := auth.uid();
+  v_is_member boolean;
+  v_spinner   uuid;
+  v_members   json;
+  v_result    json;
+begin
+  if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
+
+  select exists(select 1 from public.group_members where group_id = p_group_id and user_id = v_uid)
+    into v_is_member;
+  if not v_is_member then return json_build_object('ok', false, 'error', 'not_a_member'); end if;
+
+  select public.group_daily_spinner(p_group_id) into v_spinner;
+
+  select json_agg(json_build_object(
+           'user_id', gm.user_id,
+           'nickname', coalesce(p.nickname, split_part(u.email, '@', 1)),
+           'avatar_url', p.avatar_url,
+           'joined_at', gm.joined_at
+         ) order by gm.joined_at)
+    into v_members
+    from public.group_members gm
+    join auth.users u on u.id = gm.user_id
+    left join public.profiles p on p.user_id = gm.user_id
+   where gm.group_id = p_group_id;
+
+  select json_build_object(
+           'winner_name', winner_name, 'wheel_mode', wheel_mode,
+           'spinner_id', spinner_id, 'created_at', created_at
+         )
+    into v_result
+    from public.group_spin_results
+   where group_id = p_group_id and spin_day = (now() at time zone 'Asia/Taipei')::date;
+
+  return json_build_object(
+    'ok', true, 'group_id', p_group_id,
+    'members', coalesce(v_members, '[]'::json),
+    'daily_spinner_id', v_spinner,
+    'is_daily_spinner', (v_spinner = v_uid),
+    'today_result', v_result
+  );
+end;
+$$;
+revoke all on function public.group_status(bigint) from public, anon;
+grant execute on function public.group_status(bigint) to authenticated;
+
+-- ── record_group_result：轉盤人回填今天的結果，內部驗證真的輪到你 ──
+create or replace function public.record_group_result(p_group_id bigint, p_winner_name text, p_wheel_mode text default 'default')
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_spinner uuid;
+begin
+  if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
+
+  select public.group_daily_spinner(p_group_id) into v_spinner;
+  if v_spinner is distinct from v_uid then
+    return json_build_object('ok', false, 'error', 'not_your_turn');
+  end if;
+
+  insert into public.group_spin_results (group_id, spinner_id, winner_name, wheel_mode)
+  values (p_group_id, v_uid, left(p_winner_name, 120), coalesce(nullif(trim(p_wheel_mode), ''), 'default'))
+  on conflict (group_id, spin_day) do nothing;
+
+  return json_build_object('ok', true);
+end;
+$$;
+revoke all on function public.record_group_result(bigint, text, text) from public, anon;
+grant execute on function public.record_group_result(bigint, text, text) to authenticated;
+
+-- ── Realtime：群組結果要即時廣播給全組 ─────────────────────
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'group_spin_results'
+  ) then
+    alter publication supabase_realtime add table public.group_spin_results;
   end if;
 end $$;

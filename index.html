@@ -142,6 +142,25 @@
   }
   .add-spot-btn:hover { filter: brightness(1.04); }
 
+  /* ── 飯搭子圈：群組模式橫幅 ── */
+  .group-banner {
+    width: 100%; border-radius: 14px; padding: 12px 14px; font-size: 13px;
+    background: var(--accent-soft); color: var(--text); display: flex; flex-direction: column; gap: 8px;
+  }
+  .group-banner[hidden] { display: none; }
+  .group-banner-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .group-banner-title { font-weight: 800; font-size: 13.5px; }
+  .group-banner-leave {
+    background: none; border: none; color: var(--text-2); font: inherit; font-size: 12px;
+    cursor: pointer; text-decoration: underline; padding: 2px 4px;
+  }
+  .group-banner-turn { font-size: 12.5px; color: var(--text-2); }
+  .group-banner-turn.mine { color: var(--accent); font-weight: 700; }
+  .group-banner-result {
+    font-size: 12.5px; background: var(--surface); border-radius: 10px; padding: 8px 10px;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+
   .match-count {
     font-size: 14px; color: var(--text-2); letter-spacing: 1px;
     display: flex; align-items: center; gap: 8px;
@@ -314,6 +333,11 @@
     transition: border-color .12s, color .12s;
   }
   .auth-bar button:hover { border-color: var(--action); color: var(--action); }
+  .avatar-thumb {
+    width: 24px; height: 24px; border-radius: 50%; object-fit: cover;
+    border: 1.5px solid var(--line); vertical-align: middle;
+  }
+  .avatar-thumb[hidden] { display: none; }
 
   .quota-badge {
     background: var(--accent-soft); color: var(--accent); font-weight: 700;
@@ -422,6 +446,122 @@
   .spot-msg.ok { color: var(--accent); font-weight: 700; }
   .spot-card .btn[disabled] { opacity: .55; cursor: progress; }
 
+  /* ── 個人檔案 ── */
+  .profile-veil {
+    position: fixed; inset: 0; z-index: 70; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(20, 16, 12, .6); backdrop-filter: blur(4px);
+  }
+  .profile-veil.show { display: flex; }
+  .profile-card {
+    background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg);
+    width: min(440px, 100%); max-height: 88vh; overflow-y: auto;
+    padding: 26px 24px; position: relative; text-align: left;
+    display: flex; flex-direction: column; gap: 14px;
+    animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+  }
+  .profile-card h2 { margin: 0; font-size: 19px; font-weight: 900; padding-right: 22px; }
+  .profile-card .close {
+    position: absolute; top: 10px; right: 12px; background: none; border: none;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px;
+  }
+  .profile-avatar-row { display: flex; align-items: center; gap: 14px; }
+  .profile-avatar-preview {
+    width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+    background: var(--surface-2); border: 1.5px solid var(--line); flex: none;
+  }
+  .profile-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--text-2); }
+  .profile-card input[type="text"], .profile-card input[type="file"] {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
+    font: inherit; font-size: 14px; background: var(--surface-2); color: var(--text); box-sizing: border-box;
+  }
+  .profile-card input:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .profile-msg { font-size: 13px; min-height: 18px; }
+  .profile-msg.err { color: var(--action); }
+  .profile-msg.ok { color: var(--accent); font-weight: 700; }
+  .profile-card .btn[disabled] { opacity: .55; cursor: progress; }
+  .profile-history { border-top: 1px solid var(--line); padding-top: 12px; }
+  .profile-history h3 { margin: 0 0 8px; font-size: 14px; font-weight: 800; }
+  .profile-history-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+  .profile-history-row {
+    display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px;
+    padding: 7px 9px; border-radius: 8px; background: var(--surface-2);
+  }
+  .profile-history-row .h-date { color: var(--text-2); white-space: nowrap; }
+  .profile-history-row .h-name { font-weight: 700; text-align: right; }
+  .profile-history-empty { font-size: 12.5px; color: var(--text-2); }
+
+  /* ── 飯搭子圈 ── */
+  .groups-veil {
+    position: fixed; inset: 0; z-index: 70; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(20, 16, 12, .6); backdrop-filter: blur(4px);
+  }
+  .groups-veil.show { display: flex; }
+  .groups-card {
+    background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg);
+    width: min(460px, 100%); max-height: 88vh; overflow-y: auto;
+    padding: 26px 24px; position: relative; text-align: left;
+    display: flex; flex-direction: column; gap: 14px;
+    animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+  }
+  .groups-card h2 { margin: 0; font-size: 19px; font-weight: 900; padding-right: 22px; }
+  .groups-card .close {
+    position: absolute; top: 10px; right: 12px; background: none; border: none;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px;
+  }
+  .groups-card input[type="text"], .groups-card input[type="email"] {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
+    font: inherit; font-size: 14px; background: var(--surface-2); color: var(--text); box-sizing: border-box;
+  }
+  .groups-card input:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .groups-card .btn[disabled] { opacity: .55; cursor: progress; }
+  .groups-msg { font-size: 13px; min-height: 18px; }
+  .groups-msg.err { color: var(--action); }
+  .groups-msg.ok { color: var(--accent); font-weight: 700; }
+
+  .group-create-row { display: flex; gap: 8px; }
+  .group-create-row input { flex: 1; min-width: 0; }
+  .group-create-row .btn { padding: 10px 14px; font-size: 13px; white-space: nowrap; }
+
+  .group-list { display: flex; flex-direction: column; gap: 8px; }
+  .group-list-empty { font-size: 12.5px; color: var(--text-2); }
+  .group-list-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 12px; border-radius: 12px; background: var(--surface-2);
+    border: 1.5px solid var(--line); cursor: pointer; text-align: left;
+    font: inherit; color: var(--text); width: 100%;
+  }
+  .group-list-item:hover { border-color: var(--accent); }
+  .group-list-item .g-name { font-weight: 700; font-size: 14px; }
+  .group-list-item .g-meta { font-size: 12px; color: var(--text-2); }
+
+  .group-detail-back {
+    background: none; border: none; color: var(--accent); font: inherit; font-size: 13px;
+    cursor: pointer; padding: 2px 0; text-align: left; font-weight: 700;
+  }
+  .group-detail-name { font-size: 18px; font-weight: 900; margin: 0; }
+  .group-member-list { display: flex; flex-direction: column; gap: 8px; }
+  .group-member-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    border-radius: 10px; background: var(--surface-2);
+  }
+  .group-member-avatar {
+    width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
+    background: var(--chip-bg); border: 1.5px solid var(--line); flex: none;
+  }
+  .group-member-name { font-size: 13.5px; font-weight: 700; flex: 1; }
+  .group-member-badge {
+    font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft);
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .group-add-member { display: flex; gap: 8px; }
+  .group-add-member input { flex: 1; min-width: 0; }
+  .group-add-member .btn { padding: 10px 14px; font-size: 13px; white-space: nowrap; }
+  .group-today-result {
+    font-size: 13px; background: var(--accent-soft); border-radius: 12px; padding: 10px 12px;
+  }
+
   /* ── 轉盤上的廣告加轉提示 ── */
   .bonus-invite {
     position: absolute; inset: 0; z-index: 6; display: none;
@@ -442,7 +582,10 @@
     <div class="locale">出發點 <strong>基隆路一段 200 號</strong>｜步行圈內平價午餐</div>
     <div class="auth-bar" id="authBar" hidden>
       <span class="quota-badge" id="quotaBadge" hidden></span>
+      <img class="avatar-thumb" id="avatarThumb" hidden alt="">
       <span class="who" id="who"></span>
+      <button id="profileBtn" type="button">個人檔案</button>
+      <button id="groupsBtn" type="button">飯搭子圈</button>
       <button id="logoutBtn">登出</button>
     </div>
   </header>
@@ -454,6 +597,14 @@
         <button class="wheel-tab" id="tabShared" type="button" role="tab" aria-selected="false">共享轉盤<span class="wheel-tab-count" id="sharedCount" hidden>0</span></button>
       </div>
       <button class="add-spot-btn" id="addSpotBtn" type="button" hidden>+ 新增地點到共享清單</button>
+      <div class="group-banner" id="groupBanner" hidden>
+        <div class="group-banner-head">
+          <span class="group-banner-title">🍚 飯搭子圈：<span id="groupBannerName"></span></span>
+          <button class="group-banner-leave" id="groupBannerLeave" type="button">離開群組模式</button>
+        </div>
+        <div class="group-banner-turn" id="groupBannerTurn"></div>
+        <div class="group-banner-result" id="groupBannerResult" hidden></div>
+      </div>
       <div class="match-count">今天可轉 <b id="count">0</b> 家</div>
       <div class="wheel-stage" id="stage">
         <div class="pointer" aria-hidden="true"></div>
@@ -597,6 +748,69 @@
 
     <div class="spot-msg" id="spotMsg" role="status" aria-live="polite"></div>
     <button class="btn btn-go" id="spotSubmitBtn" type="button">新增到共享清單</button>
+  </div>
+</div>
+
+<div class="profile-veil" id="profileVeil" aria-hidden="true">
+  <div class="profile-card" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+    <button class="close" id="profileCloseBtn" aria-label="關閉">×</button>
+    <h2 id="profileTitle">個人檔案</h2>
+
+    <div class="profile-avatar-row">
+      <img class="profile-avatar-preview" id="profileAvatarPreview" alt="大頭照預覽">
+      <label class="profile-field" style="flex:1">
+        <span>大頭照（最大 2MB）</span>
+        <input type="file" id="profileAvatarInput" accept="image/png,image/jpeg,image/webp,image/gif">
+      </label>
+    </div>
+    <label class="profile-field">
+      <span>暱稱</span>
+      <input type="text" id="profileNickname" maxlength="40" placeholder="想讓大家怎麼叫你？">
+    </label>
+    <div class="profile-msg" id="profileMsg" role="status" aria-live="polite"></div>
+    <button class="btn btn-go" id="profileSaveBtn" type="button">儲存</button>
+
+    <div class="profile-history">
+      <h3>我的轉盤紀錄</h3>
+      <div class="profile-history-list" id="profileHistoryList">
+        <div class="profile-history-empty">還沒轉過，快去轉一次吧</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="groups-veil" id="groupsVeil" aria-hidden="true">
+  <div class="groups-card" role="dialog" aria-modal="true" aria-labelledby="groupsTitle">
+    <button class="close" id="groupsCloseBtn" aria-label="關閉">×</button>
+
+    <div id="groupListView">
+      <h2 id="groupsTitle">飯搭子圈</h2>
+      <div class="group-create-row">
+        <input type="text" id="groupNameInput" maxlength="60" placeholder="新群組名稱…">
+        <button class="btn btn-again" id="groupCreateBtn" type="button">＋ 建立</button>
+      </div>
+      <div class="groups-msg" id="groupListMsg" role="status" aria-live="polite"></div>
+      <div class="group-list" id="groupList">
+        <div class="group-list-empty">還沒有加入任何飯搭子圈</div>
+      </div>
+    </div>
+
+    <div id="groupDetailView" hidden>
+      <button class="group-detail-back" id="groupDetailBack" type="button">‹ 回列表</button>
+      <h2 class="group-detail-name" id="groupDetailName"></h2>
+
+      <div class="group-today-result" id="groupDetailResult" hidden></div>
+
+      <div class="group-add-member">
+        <input type="email" id="groupAddEmail" placeholder="輸入 email 加入名單…">
+        <button class="btn btn-again" id="groupAddBtn" type="button">加入名單</button>
+      </div>
+      <div class="groups-msg" id="groupDetailMsg" role="status" aria-live="polite"></div>
+
+      <div class="group-member-list" id="groupMemberList"></div>
+
+      <button class="btn btn-go" id="groupUseWheelBtn" type="button">用這個群組轉盤</button>
+    </div>
   </div>
 </div>
 
@@ -1039,6 +1253,7 @@ const CAT_ORDER = Object.keys(CAT_EMOJI);
 const PALETTE = ["#FFD6A5","#BDE3C9","#FDF3B6","#B8DDF5","#F5C6C6","#CBD9A8","#F5D9EF","#B9D8D2","#F3C088","#DED1F2"];
 const TEXT_ON_WHEEL = "#3A3226";
 const ORIGIN_LL = [25.0401, 121.5629]; // 基隆路一段 200 號附近，估算走路時間用（近似值）
+const AVATAR_FALLBACK = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" rx="20" fill="%23D8D2C4"/><text x="20" y="26" font-size="18" text-anchor="middle" fill="%23FFFFFF">🍚</text></svg>';
 
 /* ══════════ 狀態 ══════════ */
 const todayKey = new Date().toISOString().slice(0, 10);
@@ -1087,6 +1302,11 @@ const eligible = () => activeList().filter(r =>
 
 /* ══════════ DOM ══════════ */
 const $ = id => document.getElementById(id);
+/* 共享轉盤／飯搭子圈的名稱、暱稱、地址等都是使用者自行輸入的文字，
+   組 innerHTML 前一定要跳脫，避免存進去的 <script> 之類內容被當成 HTML 執行。 */
+const escapeHtml = s => String(s ?? "").replace(/[&<>"']/g, c => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+}[c]));
 const canvas = $("wheel"), ctx = canvas.getContext("2d");
 const S = 1000, CX = S / 2, R = S / 2 - 14;
 
@@ -1146,7 +1366,8 @@ function refresh() {
     ? "共享清單還是空的 🌱<br>來新增第一家吧"
     : "沒有符合條件的店 😥<br>放寬一點預算或走路時間吧";
   $("spinBtn").disabled =
-    currentList.length === 0 || state.spinning || auth.busy || !auth.user || outOfSpins();
+    currentList.length === 0 || state.spinning || auth.busy || !auth.user || outOfSpins() ||
+    (activeGroup && !isMyGroupTurn());
   drawWheel(currentList);
   renderChips();
   renderRoster();
@@ -1161,7 +1382,7 @@ function renderChips() {
     const count = activeList().filter(r => r.cat === cat).length;
     const b = document.createElement("button");
     b.className = "chip" + (state.cats.has(cat) ? " on" : "");
-    b.innerHTML = `${CAT_EMOJI[cat] || "🍽️"} ${cat}<span class="n">${count}</span>`;
+    b.innerHTML = `${CAT_EMOJI[cat] || "🍽️"} ${escapeHtml(cat)}<span class="n">${count}</span>`;
     b.onclick = () => {
       state.cats.has(cat) ? state.cats.delete(cat) : state.cats.add(cat);
       refresh();
@@ -1180,10 +1401,10 @@ function renderRoster() {
     const div = document.createElement("div");
     div.className = "r-row" + (skipped || !inFilter ? " skipped" : "");
     div.innerHTML = `
-      <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${r.name}</span>
+      <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span>
         ${skipped ? '<button class="unskip">恢復</button>' : ""}</div>
-      <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${r.walk} 分</span><span>${r.addr}</span></div>
-      ${r.note ? `<div class="r-note">${r.note}</div>` : ""}`;
+      <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${r.walk} 分</span><span>${escapeHtml(r.addr)}</span></div>
+      ${r.note ? `<div class="r-note">${escapeHtml(r.note)}</div>` : ""}`;
     const un = div.querySelector(".unskip");
     if (un) un.onclick = () => { state.skipped.delete(r.name); refresh(); };
     box.appendChild(div);
@@ -1265,6 +1486,7 @@ async function spin() {
   if (state.spinning || auth.busy || currentList.length === 0) return;
   if (!CONFIGURED) { openGate(); return; }
   if (!auth.user) { openGate(); return; }
+  if (activeGroup && !isMyGroupTurn()) { setHint("今天不是輪到你，等輪到你再轉吧 🍚", true); return; }
   if (outOfSpins()) { flashOutOfSpins(); return; }
 
   auth.busy = true;
@@ -1286,10 +1508,10 @@ async function spin() {
 
   auth.remaining = res.remaining;
   updateQuota();
-  animateSpin();
+  animateSpin(res.spin_id);
 }
 
-function animateSpin() {
+function animateSpin(spinId) {
   if (state.spinning || currentList.length === 0) return;
   const list = currentList;
   const n = list.length;
@@ -1324,9 +1546,28 @@ function animateSpin() {
       refresh();   // 依登入狀態與剩餘次數重新決定按鈕是否可按
       updateQuota();  // 轉盤停下後才決定是否顯示「看廣告多轉一次」，避免蓋住轉動畫面
       showResult(list[winner]);
+      recordSpinOutcome(list[winner], spinId);
     }
   }
   requestAnimationFrame(frame);
+}
+
+/* 轉盤動畫結束、知道轉到誰之後才回填：個人紀錄 + （如果在群組模式）廣播給全組。
+   都是背景動作，失敗也不影響畫面上已經顯示的結果。 */
+async function recordSpinOutcome(winner, spinId) {
+  try {
+    if (spinId) await supabase.rpc("set_spin_result", {
+      p_spin_id: spinId, p_winner_name: winner.name, p_wheel_mode: state.wheelMode
+    });
+  } catch (e) {}
+  if (activeGroup) {
+    try {
+      await supabase.rpc("record_group_result", {
+        p_group_id: activeGroup.group_id, p_winner_name: winner.name, p_wheel_mode: state.wheelMode
+      });
+      await refreshActiveGroupStatus();
+    } catch (e) {}
+  }
 }
 
 /* ══════════ 結果 ══════════ */
@@ -1397,7 +1638,7 @@ $("rSkip").onclick = () => {
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { hideResult(); closeBonusModal(); closeSpotModal(); }
+  if (e.key === "Escape") { hideResult(); closeBonusModal(); closeSpotModal(); closeProfileModal(); closeGroupsModal(); }
   if (e.code === "Space"
       && !$("veil").classList.contains("show")
       && !$("gate").classList.contains("show")
@@ -1615,6 +1856,340 @@ $("spotSubmitBtn").onclick = async () => {
   }
 };
 
+/* ══════════ 個人檔案 ══════════ */
+let myProfile = { nickname: null, avatar_url: null };
+
+function updateAvatarThumb() {
+  const img = $("avatarThumb");
+  if (myProfile.avatar_url) { img.src = myProfile.avatar_url; img.hidden = false; }
+  else { img.hidden = true; }
+}
+
+async function loadMyProfile() {
+  if (!auth.user) return;
+  try {
+    const { data, error } = await supabase
+      .from("profiles").select("nickname, avatar_url").eq("user_id", auth.user.id).maybeSingle();
+    if (!error && data) myProfile = data;
+  } catch (e) {}
+  updateAvatarThumb();
+}
+
+function setProfileMsg(text, kind) {
+  const m = $("profileMsg");
+  m.textContent = text;
+  m.className = "profile-msg" + (kind ? " " + kind : "");
+}
+
+async function loadSpinHistory() {
+  const box = $("profileHistoryList");
+  if (!auth.user) return;
+  try {
+    const { data, error } = await supabase
+      .from("spins").select("spun_at, winner_name, wheel_mode")
+      .not("winner_name", "is", null)
+      .order("spun_at", { ascending: false })
+      .limit(30);
+    if (error || !data || data.length === 0) {
+      box.innerHTML = `<div class="profile-history-empty">還沒轉過，快去轉一次吧</div>`;
+      return;
+    }
+    box.innerHTML = data.map(r => {
+      const d = new Date(r.spun_at);
+      const dateStr = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      const modeTag = r.wheel_mode === "shared" ? "共享" : "預設";
+      return `<div class="profile-history-row"><span class="h-date">${dateStr}・${modeTag}</span><span class="h-name">${escapeHtml(r.winner_name)}</span></div>`;
+    }).join("");
+  } catch (e) {
+    box.innerHTML = `<div class="profile-history-empty">讀取失敗，請稍後再試</div>`;
+  }
+}
+
+function openProfileModal() {
+  if (!auth.user) { openGate(); return; }
+  $("profileVeil").classList.add("show");
+  $("profileVeil").setAttribute("aria-hidden", "false");
+  $("profileNickname").value = myProfile.nickname || "";
+  $("profileAvatarPreview").src = myProfile.avatar_url || AVATAR_FALLBACK;
+  $("profileAvatarInput").value = "";
+  setProfileMsg("", "");
+  loadSpinHistory();
+}
+function closeProfileModal() {
+  $("profileVeil").classList.remove("show");
+  $("profileVeil").setAttribute("aria-hidden", "true");
+}
+$("profileBtn").onclick = openProfileModal;
+$("profileCloseBtn").onclick = closeProfileModal;
+$("profileVeil").onclick = e => { if (e.target === $("profileVeil")) closeProfileModal(); };
+
+$("profileAvatarInput").onchange = () => {
+  const file = $("profileAvatarInput").files[0];
+  if (file) $("profileAvatarPreview").src = URL.createObjectURL(file);
+};
+
+$("profileSaveBtn").onclick = async () => {
+  if (!auth.user) { openGate(); return; }
+  $("profileSaveBtn").disabled = true;
+  setProfileMsg("儲存中…", "");
+  try {
+    let avatarUrl = myProfile.avatar_url;
+    const file = $("profileAvatarInput").files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) { setProfileMsg("圖片太大了，最大 2MB", "err"); return; }
+      const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+      const path = `${auth.user.id}/avatar.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("avatars").upload(path, file, { upsert: true, contentType: file.type || "image/png" });
+      if (upErr) { setProfileMsg("大頭照上傳失敗：" + upErr.message, "err"); return; }
+      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+      avatarUrl = pub.publicUrl + "?t=" + Date.now();
+    }
+    const nickname = $("profileNickname").value.trim().slice(0, 40) || null;
+    const { error } = await supabase.from("profiles").upsert({
+      user_id: auth.user.id, nickname, avatar_url: avatarUrl, updated_at: new Date().toISOString()
+    });
+    if (error) { setProfileMsg("儲存失敗：" + error.message, "err"); return; }
+    myProfile = { nickname, avatar_url: avatarUrl };
+    updateAvatarThumb();
+    setProfileMsg("已儲存！", "ok");
+  } catch (e) {
+    setProfileMsg("連線發生問題，請稍後再試", "err");
+  } finally {
+    $("profileSaveBtn").disabled = false;
+  }
+};
+
+/* ══════════ 飯搭子圈 ══════════ */
+let myGroups = [];
+let currentGroupDetail = null;   // group_status() 的完整回傳，對應目前開著的詳細頁
+let activeGroup = null;          // { group_id, name }：目前綁定在轉盤上的群組（null＝個人模式）
+
+function isMyGroupTurn() {
+  return !!(activeGroup && currentGroupDetail &&
+    currentGroupDetail.group_id === activeGroup.group_id && currentGroupDetail.is_daily_spinner);
+}
+
+function openGroupsModal() {
+  if (!auth.user) { openGate(); return; }
+  $("groupsVeil").classList.add("show");
+  $("groupsVeil").setAttribute("aria-hidden", "false");
+  showGroupListView();
+  loadMyGroups();
+}
+function closeGroupsModal() {
+  $("groupsVeil").classList.remove("show");
+  $("groupsVeil").setAttribute("aria-hidden", "true");
+}
+$("groupsBtn").onclick = openGroupsModal;
+$("groupsCloseBtn").onclick = closeGroupsModal;
+$("groupsVeil").onclick = e => { if (e.target === $("groupsVeil")) closeGroupsModal(); };
+
+function showGroupListView() { $("groupListView").hidden = false; $("groupDetailView").hidden = true; }
+function showGroupDetailView() { $("groupListView").hidden = true; $("groupDetailView").hidden = false; }
+
+function setGroupListMsg(text, kind) {
+  const m = $("groupListMsg");
+  m.textContent = text; m.className = "groups-msg" + (kind ? " " + kind : "");
+}
+function setGroupDetailMsg(text, kind) {
+  const m = $("groupDetailMsg");
+  m.textContent = text; m.className = "groups-msg" + (kind ? " " + kind : "");
+}
+
+async function loadMyGroups() {
+  try {
+    const { data, error } = await supabase.rpc("my_groups");
+    if (!error && Array.isArray(data)) myGroups = data;
+  } catch (e) {}
+  renderGroupList();
+}
+
+function renderGroupList() {
+  const box = $("groupList");
+  if (myGroups.length === 0) {
+    box.innerHTML = `<div class="group-list-empty">還沒有加入任何飯搭子圈</div>`;
+    return;
+  }
+  box.innerHTML = "";
+  for (const g of myGroups) {
+    const btn = document.createElement("button");
+    btn.className = "group-list-item";
+    btn.type = "button";
+    btn.innerHTML = `<span class="g-name">${escapeHtml(g.name)}</span><span class="g-meta">${g.member_count} 人</span>`;
+    btn.onclick = () => openGroupDetail(g.group_id);
+    box.appendChild(btn);
+  }
+}
+
+$("groupCreateBtn").onclick = async () => {
+  const name = $("groupNameInput").value.trim();
+  if (!name) { setGroupListMsg("請輸入群組名稱", "err"); return; }
+  $("groupCreateBtn").disabled = true;
+  setGroupListMsg("建立中…", "");
+  try {
+    const { data, error } = await supabase.rpc("create_group", { p_name: name });
+    if (error || !data || !data.ok) { setGroupListMsg("建立失敗，請稍後再試", "err"); return; }
+    $("groupNameInput").value = "";
+    setGroupListMsg("建立成功！", "ok");
+    await loadMyGroups();
+    openGroupDetail(data.group_id);
+  } catch (e) {
+    setGroupListMsg("連線發生問題，請稍後再試", "err");
+  } finally {
+    $("groupCreateBtn").disabled = false;
+  }
+};
+
+async function openGroupDetail(groupId) {
+  showGroupDetailView();
+  $("groupDetailName").textContent = "載入中…";
+  $("groupMemberList").innerHTML = "";
+  $("groupDetailResult").hidden = true;
+  setGroupDetailMsg("", "");
+  await refreshGroupDetail(groupId);
+}
+
+async function refreshGroupDetail(groupId) {
+  try {
+    const { data, error } = await supabase.rpc("group_status", { p_group_id: groupId });
+    if (error || !data || !data.ok) { setGroupDetailMsg("讀取群組資料失敗", "err"); return; }
+    currentGroupDetail = data;
+    const g = myGroups.find(x => x.group_id === groupId);
+    $("groupDetailName").textContent = g ? g.name : "飯搭子圈";
+    renderGroupMembers(data);
+    renderGroupResult(data);
+    updateGroupUseWheelBtn();
+    if (activeGroup && activeGroup.group_id === groupId) syncGroupBanner();
+  } catch (e) {
+    setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+  }
+}
+
+function renderGroupMembers(data) {
+  const box = $("groupMemberList");
+  box.innerHTML = "";
+  for (const m of data.members) {
+    const row = document.createElement("div");
+    row.className = "group-member-row";
+    const isSpinner = m.user_id === data.daily_spinner_id;
+    row.innerHTML = `
+      <img class="group-member-avatar" src="${escapeHtml(m.avatar_url || AVATAR_FALLBACK)}" alt="">
+      <span class="group-member-name">${escapeHtml(m.nickname)}</span>
+      ${isSpinner ? '<span class="group-member-badge">🎯 今日轉盤人</span>' : ""}
+    `;
+    box.appendChild(row);
+  }
+}
+
+function renderGroupResult(data) {
+  const box = $("groupDetailResult");
+  if (!data.today_result) { box.hidden = true; return; }
+  box.hidden = false;
+  const modeTag = data.today_result.wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
+  box.innerHTML = `🎉 今天大家跟著吃這個：<b>${escapeHtml(data.today_result.winner_name)}</b>（${modeTag}）`;
+}
+
+function updateGroupUseWheelBtn() {
+  const btn = $("groupUseWheelBtn");
+  if (!currentGroupDetail) return;
+  const isActive = activeGroup && activeGroup.group_id === currentGroupDetail.group_id;
+  btn.textContent = isActive ? "已經是使用中的群組" : "用這個群組轉盤";
+  btn.disabled = !!isActive;
+}
+
+$("groupDetailBack").onclick = () => { showGroupListView(); loadMyGroups(); };
+
+$("groupAddBtn").onclick = async () => {
+  const email = $("groupAddEmail").value.trim();
+  if (!email) { setGroupDetailMsg("請輸入 email", "err"); return; }
+  if (!currentGroupDetail) return;
+  $("groupAddBtn").disabled = true;
+  setGroupDetailMsg("加入中…", "");
+  try {
+    const { data, error } = await supabase.rpc("add_group_member_by_email", {
+      p_group_id: currentGroupDetail.group_id, p_email: email
+    });
+    if (error || !data || !data.ok) {
+      const reason = (data && data.error === "user_not_found")
+        ? "找不到這個 email 的帳號（對方要先註冊過才能加）" : "加入失敗，請稍後再試";
+      setGroupDetailMsg(reason, "err");
+      return;
+    }
+    $("groupAddEmail").value = "";
+    setGroupDetailMsg("已加入名單！", "ok");
+    await refreshGroupDetail(currentGroupDetail.group_id);
+    await loadMyGroups();
+  } catch (e) {
+    setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+  } finally {
+    $("groupAddBtn").disabled = false;
+  }
+};
+
+$("groupUseWheelBtn").onclick = () => {
+  if (!currentGroupDetail) return;
+  const g = myGroups.find(x => x.group_id === currentGroupDetail.group_id);
+  activeGroup = { group_id: currentGroupDetail.group_id, name: g ? g.name : "飯搭子圈" };
+  updateGroupUseWheelBtn();
+  closeGroupsModal();
+  syncGroupBanner();
+  refresh();
+};
+
+function leaveGroupMode() {
+  activeGroup = null;
+  syncGroupBanner();
+  refresh();
+}
+$("groupBannerLeave").onclick = leaveGroupMode;
+
+function syncGroupBanner() {
+  const banner = $("groupBanner");
+  if (!activeGroup) { banner.hidden = true; return; }
+  banner.hidden = false;
+  $("groupBannerName").textContent = activeGroup.name;
+  const d = (currentGroupDetail && currentGroupDetail.group_id === activeGroup.group_id) ? currentGroupDetail : null;
+  const turnEl = $("groupBannerTurn");
+  if (d) {
+    const spinner = d.members.find(m => m.user_id === d.daily_spinner_id);
+    turnEl.textContent = d.is_daily_spinner ? "今天輪到你轉盤囉！" : `今天輪到 ${spinner ? spinner.nickname : "…"} 轉盤`;
+    turnEl.classList.toggle("mine", d.is_daily_spinner);
+  } else {
+    turnEl.textContent = "讀取輪值資訊中…";
+    turnEl.classList.remove("mine");
+  }
+  const resultEl = $("groupBannerResult");
+  if (d && d.today_result) {
+    resultEl.hidden = false;
+    const modeTag = d.today_result.wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
+    resultEl.innerHTML = `🎉 今天吃：<b>${escapeHtml(d.today_result.winner_name)}</b>（${modeTag}）`;
+  } else {
+    resultEl.hidden = true;
+  }
+}
+
+async function refreshActiveGroupStatus() {
+  if (!activeGroup) return;
+  try {
+    const { data, error } = await supabase.rpc("group_status", { p_group_id: activeGroup.group_id });
+    if (!error && data && data.ok) currentGroupDetail = data;
+  } catch (e) {}
+  syncGroupBanner();
+  refresh();
+}
+
+let groupResultChannel = null;
+function subscribeGroupResults() {
+  if (groupResultChannel) return;
+  groupResultChannel = supabase.channel("group_spin_results_changes")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_spin_results" }, payload => {
+      if (activeGroup && payload.new.group_id === activeGroup.group_id) refreshActiveGroupStatus();
+      if (currentGroupDetail && payload.new.group_id === currentGroupDetail.group_id) refreshGroupDetail(currentGroupDetail.group_id);
+    })
+    .subscribe();
+}
+
 /* ── 登入視窗 ── */
 function openGate() {
   if (auth.user) return;
@@ -1640,9 +2215,16 @@ async function applySession(session) {
     await fetchStatus();
     loadSharedSpots();
     subscribeSharedSpots();
+    loadMyProfile();
+    subscribeGroupResults();
   } else {
     auth.remaining = null;
     $("authBar").hidden = true;
+    myProfile = { nickname: null, avatar_url: null };
+    updateAvatarThumb();
+    activeGroup = null;
+    currentGroupDetail = null;
+    syncGroupBanner();
     updateQuota();
     refresh();
     openGate();
@@ -1688,6 +2270,7 @@ $("walk").value = state.walk;
 $("walkOut").textContent = state.walk + " 分鐘";
 syncWheelModeUI();
 recomputeCatsInData();
+syncGroupBanner();
 refresh();
 
 /* 啟動 Supabase 登入流程 */
