@@ -165,10 +165,11 @@
 
   /* ── controls (order slip) ── */
   .slip { padding: 22px 20px; display: flex; flex-direction: column; gap: 20px; }
-  .slip h2 {
-    margin: 0; font-size: var(--fs-lg); letter-spacing: 4px; color: var(--accent);
+  .slip-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
     border-bottom: 2px dashed var(--line); padding-bottom: 12px;
   }
+  .slip h2 { margin: 0; font-size: var(--fs-lg); letter-spacing: 4px; color: var(--accent); }
   .field label { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--fs-base); font-weight: 700; }
   .field output {
     color: var(--action); font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums;

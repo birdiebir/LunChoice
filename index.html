@@ -63,7 +63,13 @@
     </section>
 
     <aside class="card slip" aria-label="今日條件">
-      <h2>今日條件</h2>
+      <div class="slip-head">
+        <h2>今日條件</h2>
+        <span class="cats-head-actions">
+          <button id="allCats" class="cats-all-btn" type="button">全選</button>
+          <button id="noCats" type="button">清空</button>
+        </span>
+      </div>
 
       <div class="field">
         <label for="budget">預算上限（人均）<output id="budgetOut">NT$500</output></label>
@@ -80,10 +86,6 @@
       <div>
         <div class="cats-head">
           <span>想吃的類別</span>
-          <span class="cats-head-actions">
-            <button id="allCats" class="cats-all-btn" type="button">全選</button>
-            <button id="noCats" type="button">清空</button>
-          </span>
         </div>
         <div class="chips" id="chips"></div>
       </div>
