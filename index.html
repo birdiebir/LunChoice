@@ -504,6 +504,11 @@ const SUPABASE_URL = "https://tjnyeqmxofmheumsntkz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqbnllcW14b2ZtaGV1bXNudGt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5OTM3MzMsImV4cCI6MjA5OTU2OTczM30.VLWZMj3j9cBcou7dxGwl3j8SEWfelvIFGJhM6ltFxOI";
 const DAILY_LIMIT = 3;               // 每人每天可轉次數（也要和 SQL 內的預設一致）
 
+/* 網址加 ?adtest=1 開啟廣告測試模式：轉盤上的廣告按鈕永遠顯示、可以無限次點開廣告視窗，
+   不受「次數用完」與「今天已經領過」限制，方便反覆檢查廣告素材／版面。
+   後端每人每天只會真的核發一次加轉額度，測試模式不會讓額度被無限重複領取。 */
+const AD_TEST_MODE = new URLSearchParams(location.search).has("adtest");
+
 const CONFIGURED = !SUPABASE_URL.includes("YOUR-PROJECT");
 const supabase = CONFIGURED ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 const auth = { user: null, remaining: null, limit: DAILY_LIMIT, busy: false, bonusAvailable: false };
@@ -1241,7 +1246,7 @@ function updateQuota() {
   badge.hidden = false;
   badge.textContent = `今天還可轉 ${left}/${auth.limit} 次`;
   badge.classList.toggle("spent", left <= 0);
-  bonusInvite.hidden = !(left <= 0 && auth.bonusAvailable) || state.spinning;
+  bonusInvite.hidden = AD_TEST_MODE ? state.spinning : (!(left <= 0 && auth.bonusAvailable) || state.spinning);
   if (left <= 0) flashOutOfSpins();
   else setHint(DEFAULT_HINT, false);
 }
@@ -1277,7 +1282,7 @@ async function fetchStatus() {
    3. 點廣告 banner 本身會另開分頁到廣告網址，不會關閉視窗 */
 let bonusCloseTimer = null;
 function openBonusModal() {
-  if (!auth.user || !auth.bonusAvailable) return;
+  if (!auth.user || (!AD_TEST_MODE && !auth.bonusAvailable)) return;
   $("bonusVeil").classList.add("show");
   $("bonusVeil").setAttribute("aria-hidden", "false");
   $("bonusCloseBtn").disabled = true;
