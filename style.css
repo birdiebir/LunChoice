@@ -6,7 +6,7 @@
      ══════════════════════════════════════════════════════════ */
   :root {
     /* 顏色（亮色） */
-    --bg: #F6F9FD;
+    --bg: #FFFFFF;
     --surface: #FFFFFF;
     --surface-2: #EEF3FA;
     --text: #16233A;
@@ -57,7 +57,7 @@
     }
   }
   :root[data-theme="light"] {
-    --bg: #F6F9FD;
+    --bg: #FFFFFF;
     --surface: #FFFFFF;
     --surface-2: #EEF3FA;
     --text: #16233A;
