@@ -13,12 +13,17 @@
     <h1 class="brand" id="brand">午餐大<span class="zhuan">轉</span>輪</h1>
     <div class="locale">出發點 <strong>基隆路一段 200 號</strong>｜步行圈內平價午餐</div>
     <div class="auth-bar" id="authBar" hidden>
-      <span class="quota-badge" id="quotaBadge" hidden></span>
-      <img class="avatar-thumb" id="avatarThumb" hidden alt="">
-      <span class="who" id="who"></span>
       <button id="profileBtn" type="button">個人檔案</button>
       <button id="groupsBtn" type="button">飯搭子圈</button>
-      <button id="logoutBtn">登出</button>
+      <div class="user-menu" id="userMenu">
+        <button class="user-menu-trigger" id="userMenuTrigger" type="button" aria-haspopup="true" aria-expanded="false">
+          <img class="avatar-thumb" id="avatarThumb" hidden alt="">
+          <span class="who" id="who"></span>
+        </button>
+        <div class="user-menu-panel" id="userMenuPanel" hidden>
+          <button id="logoutBtn" type="button">登出</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -38,6 +43,7 @@
         <div class="group-banner-result" id="groupBannerResult" hidden></div>
       </div>
       <div class="match-count">今天可轉 <b id="count">0</b> 家</div>
+      <span class="quota-badge" id="quotaBadge" hidden></span>
       <div class="wheel-stage" id="stage">
         <div class="pointer" aria-hidden="true"></div>
         <canvas id="wheel" width="1000" height="1000" aria-label="午餐轉輪"></canvas>

@@ -852,7 +852,7 @@ $("rSkip").onclick = () => {
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { hideResult(); closeBonusModal(); closeSpotModal(); closeProfileModal(); closeGroupsModal(); }
+  if (e.key === "Escape") { hideResult(); closeBonusModal(); closeSpotModal(); closeProfileModal(); closeGroupsModal(); closeUserMenu(); }
   if (e.code === "Space"
       && !$("veil").classList.contains("show")
       && !$("gate").classList.contains("show")
@@ -1327,12 +1327,48 @@ function renderGroupMembers(data) {
     const row = document.createElement("div");
     row.className = "group-member-row";
     const isSpinner = m.user_id === data.daily_spinner_id;
+    const canRemove = data.is_owner && m.user_id !== data.created_by;
     row.innerHTML = `
       <img class="group-member-avatar" src="${escapeHtml(m.avatar_url || AVATAR_FALLBACK)}" alt="">
       <span class="group-member-name">${escapeHtml(m.nickname)}</span>
       ${isSpinner ? '<span class="group-member-badge">🎯 今日轉盤人</span>' : ""}
+      ${canRemove ? `<button class="group-member-remove" type="button" aria-label="把 ${escapeHtml(m.nickname)} 移出群組">×</button>` : ""}
     `;
+    const removeBtn = row.querySelector(".group-member-remove");
+    if (removeBtn) removeBtn.onclick = () => armOrRemoveGroupMember(removeBtn, data.group_id, m.user_id);
     box.appendChild(row);
+  }
+}
+
+/* 移除成員要點兩次：第一次把 × 換成「確定？」，2.5 秒內再點一次才真的送出，
+   避免手滑點到就把人踢出群組（沿用專案裡不用瀏覽器 confirm() 彈窗的風格）。 */
+function armOrRemoveGroupMember(btn, groupId, userId) {
+  if (btn.dataset.armed === "1") {
+    removeGroupMember(groupId, userId);
+    return;
+  }
+  btn.dataset.armed = "1";
+  btn.textContent = "確定？";
+  btn.classList.add("confirm");
+  setTimeout(() => {
+    if (btn.isConnected) {
+      btn.dataset.armed = "0";
+      btn.textContent = "×";
+      btn.classList.remove("confirm");
+    }
+  }, 2500);
+}
+
+async function removeGroupMember(groupId, userId) {
+  setGroupDetailMsg("移除中…", "");
+  try {
+    const { data, error } = await supabase.rpc("remove_group_member", { p_group_id: groupId, p_user_id: userId });
+    if (error || !data || !data.ok) { setGroupDetailMsg("移除失敗，請稍後再試", "err"); return; }
+    setGroupDetailMsg("已移除成員", "ok");
+    await refreshGroupDetail(groupId);
+    await loadMyGroups();
+  } catch (e) {
+    setGroupDetailMsg("連線發生問題，請稍後再試", "err");
   }
 }
 
@@ -1515,7 +1551,24 @@ $("gateSubmit").onclick = async () => {
 };
 $("gatePassword").addEventListener("keydown", e => { if (e.key === "Enter") $("gateSubmit").click(); });
 $("gateEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("gatePassword").focus(); });
-$("logoutBtn").onclick = async () => { if (supabase) await supabase.auth.signOut(); };
+$("logoutBtn").onclick = async () => {
+  closeUserMenu();
+  if (supabase) await supabase.auth.signOut();
+};
+
+/* ── 使用者選單（大頭照＋email，點了展開登出）── */
+function closeUserMenu() {
+  $("userMenuPanel").hidden = true;
+  $("userMenuTrigger").setAttribute("aria-expanded", "false");
+}
+$("userMenuTrigger").onclick = e => {
+  e.stopPropagation();
+  const willOpen = $("userMenuPanel").hidden;
+  $("userMenuPanel").hidden = !willOpen;
+  $("userMenuTrigger").setAttribute("aria-expanded", String(willOpen));
+};
+$("userMenuPanel").onclick = e => e.stopPropagation();
+document.addEventListener("click", closeUserMenu);
 
 /* ══════════ 初始化 ══════════ */
 $("budget").value = state.budget;

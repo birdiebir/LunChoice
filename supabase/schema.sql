@@ -477,7 +477,7 @@ $$;
 revoke all on function public.group_daily_spinner(bigint) from public, anon;
 grant execute on function public.group_daily_spinner(bigint) to authenticated;
 
--- ── group_status：群組頁一次拿到成員名單／今日轉盤人／今日結果 ──
+-- ── group_status：群組頁一次拿到成員名單／今日轉盤人／今日結果／圈主是誰 ──
 create or replace function public.group_status(p_group_id bigint)
 returns json
 language plpgsql
@@ -490,6 +490,7 @@ declare
   v_spinner   uuid;
   v_members   json;
   v_result    json;
+  v_owner     uuid;
 begin
   if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
 
@@ -497,6 +498,7 @@ begin
     into v_is_member;
   if not v_is_member then return json_build_object('ok', false, 'error', 'not_a_member'); end if;
 
+  select created_by into v_owner from public.meal_groups where id = p_group_id;
   select public.group_daily_spinner(p_group_id) into v_spinner;
 
   select json_agg(json_build_object(
@@ -521,15 +523,43 @@ begin
 
   return json_build_object(
     'ok', true, 'group_id', p_group_id,
+    'created_by', v_owner,
     'members', coalesce(v_members, '[]'::json),
     'daily_spinner_id', v_spinner,
     'is_daily_spinner', (v_spinner = v_uid),
+    'is_owner', (v_owner = v_uid),
     'today_result', v_result
   );
 end;
 $$;
 revoke all on function public.group_status(bigint) from public, anon;
 grant execute on function public.group_status(bigint) to authenticated;
+
+-- ── remove_group_member：只有圈主能移除別人，不能移除自己 ──────
+create or replace function public.remove_group_member(p_group_id bigint, p_user_id uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_owner uuid;
+begin
+  if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
+
+  select created_by into v_owner from public.meal_groups where id = p_group_id;
+  if v_owner is null then return json_build_object('ok', false, 'error', 'group_not_found'); end if;
+  if v_owner <> v_uid then return json_build_object('ok', false, 'error', 'not_owner'); end if;
+  if p_user_id = v_owner then return json_build_object('ok', false, 'error', 'cannot_remove_owner'); end if;
+
+  delete from public.group_members where group_id = p_group_id and user_id = p_user_id;
+
+  return json_build_object('ok', true);
+end;
+$$;
+revoke all on function public.remove_group_member(bigint, uuid) from public, anon;
+grant execute on function public.remove_group_member(bigint, uuid) to authenticated;
 
 -- ── record_group_result：轉盤人回填今天的結果，內部驗證真的輪到你 ──
 create or replace function public.record_group_result(p_group_id bigint, p_winner_name text, p_wheel_mode text default 'default')

@@ -301,6 +301,27 @@
   }
   .avatar-thumb[hidden] { display: none; }
 
+  /* ── 使用者選單（大頭照＋email，網頁最右邊，點了才展開登出）── */
+  .user-menu { position: relative; }
+  .user-menu-trigger {
+    display: flex; align-items: center; gap: 6px;
+    background: none; border: 1px solid var(--line); color: var(--text-2);
+    font: inherit; font-size: var(--fs-sm); border-radius: var(--radius-pill);
+    padding: 3px 12px 3px 4px; cursor: pointer; transition: border-color .12s, color .12s;
+  }
+  .user-menu-trigger:hover, .user-menu-trigger[aria-expanded="true"] { border-color: var(--action); color: var(--action); }
+  .user-menu-panel {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; min-width: 120px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg); padding: 6px;
+  }
+  .user-menu-panel[hidden] { display: none; }
+  .user-menu-panel button {
+    width: 100%; text-align: left; background: none; border: none; color: var(--text);
+    font: inherit; font-size: var(--fs-md); padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .user-menu-panel button:hover { background: var(--surface-2); color: var(--action); }
+
   .quota-badge {
     background: var(--accent-soft); color: var(--accent); font-weight: 700;
     border-radius: var(--radius-pill); padding: 4px 12px; font-size: var(--fs-md); font-variant-numeric: tabular-nums;
@@ -517,6 +538,12 @@
     font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft);
     border-radius: var(--radius-pill); padding: 2px 9px; white-space: nowrap;
   }
+  .group-member-remove {
+    background: none; border: none; color: var(--text-2); font-size: 16px; line-height: 1;
+    cursor: pointer; padding: 4px 7px; border-radius: var(--radius-sm); flex: none;
+  }
+  .group-member-remove:hover { background: var(--surface); color: var(--action); }
+  .group-member-remove.confirm { color: var(--action); font-size: var(--fs-xs); font-weight: 700; padding: 4px 8px; }
   .group-add-member { display: flex; gap: 8px; }
   .group-add-member input { flex: 1; min-width: 0; }
   .group-add-member .btn { padding: 10px 14px; font-size: var(--fs-md); white-space: nowrap; }
