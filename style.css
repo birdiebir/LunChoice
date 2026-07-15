@@ -107,10 +107,13 @@
   }
   .group-banner[hidden] { display: none; }
   .group-banner-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .group-banner-title { font-weight: 800; font-size: 13.5px; }
+  .group-banner-title {
+    font-weight: 800; font-size: 13.5px; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .group-banner-leave {
     background: none; border: none; color: var(--text-2); font: inherit; font-size: var(--fs-xs);
-    cursor: pointer; text-decoration: underline; padding: 2px 4px;
+    cursor: pointer; text-decoration: underline; padding: 2px 4px; flex: none;
   }
   .group-banner-turn { font-size: var(--fs-sm); color: var(--text-2); }
   .group-banner-turn.mine { color: var(--accent); font-weight: 700; }
@@ -290,7 +293,7 @@
   }
 
   /* ── auth bar ── */
-  .auth-bar { display: flex; align-items: center; gap: 10px; font-size: var(--fs-md); color: var(--text-2); }
+  .auth-bar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; font-size: var(--fs-md); color: var(--text-2); }
   .auth-bar[hidden] { display: none; }
   .auth-bar .who { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .auth-bar button {
@@ -521,8 +524,11 @@
     font: inherit; color: var(--text); width: 100%;
   }
   .group-list-item:hover { border-color: var(--accent); }
-  .group-list-item .g-name { font-weight: 700; font-size: var(--fs-base); }
-  .group-list-item .g-meta { font-size: var(--fs-xs); color: var(--text-2); }
+  .group-list-item .g-name {
+    font-weight: 700; font-size: var(--fs-base); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .group-list-item .g-meta { font-size: var(--fs-xs); color: var(--text-2); flex: none; }
 
   .group-detail-back {
     background: none; border: none; color: var(--accent); font: inherit; font-size: var(--fs-md);
@@ -538,7 +544,10 @@
     width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
     background: var(--chip-bg); border: 1.5px solid var(--line); flex: none;
   }
-  .group-member-name { font-size: 13.5px; font-weight: 700; flex: 1; }
+  .group-member-name {
+    font-size: 13.5px; font-weight: 700; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .group-member-badge {
     font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft);
     border-radius: var(--radius-pill); padding: 2px 9px; white-space: nowrap;

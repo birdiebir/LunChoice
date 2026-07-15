@@ -514,6 +514,39 @@ const escapeHtml = s => String(s ?? "").replace(/[&<>"']/g, c => ({
 const canvas = $("wheel"), ctx = canvas.getContext("2d");
 const S = 1000, CX = S / 2, R = S / 2 - 14;
 
+/* 彈窗（ticket／gate／bonus／spot／profile／groups）都是蓋滿全螢幕的 fixed
+   veil，但背景的 .app 內容在 DOM 上還是可以被 Tab 鍵切過去、甚至被鍵盤操作
+   到（看不到但點得到／選得到），是無障礙上的一個洞。開窗時把 .app 設成
+   inert，關窗時算「還有沒有其他窗開著」，都關了才解除。 */
+let openModalCount = 0;
+function lockBackground() {
+  openModalCount++;
+  const app = document.querySelector(".app");
+  if (app) app.inert = true;
+}
+function unlockBackground() {
+  openModalCount = Math.max(0, openModalCount - 1);
+  if (openModalCount === 0) {
+    const app = document.querySelector(".app");
+    if (app) app.inert = false;
+  }
+}
+/* 所有全螢幕彈窗共用的開關：只在真的從「沒開」變「開」／「開」變「沒開」
+   時才動 openModalCount，重複呼叫 open（例如很多地方都會防呆呼叫
+   openGate()）或關閉已關的窗都不會讓計數跑掉。 */
+function openVeil(id) {
+  const el = $(id);
+  if (!el.classList.contains("show")) lockBackground();
+  el.classList.add("show");
+  el.setAttribute("aria-hidden", "false");
+}
+function closeVeil(id) {
+  const el = $(id);
+  if (el.classList.contains("show")) unlockBackground();
+  el.classList.remove("show");
+  el.setAttribute("aria-hidden", "true");
+}
+
 /* ══════════ 轉輪繪製 ══════════ */
 function segColor(i, n) {
   if (n > 1 && i === n - 1 && i % PALETTE.length === 0) return PALETTE[3];
@@ -800,10 +833,10 @@ function showResult(r) {
     ? `https://www.google.com/maps/search/${encodeURIComponent(r.name)}/@${r.ll[0]},${r.ll[1]},18z`
     : "https://www.google.com/maps/search/?api=1&query=" +
       encodeURIComponent("台北市 " + r.name + " " + r.addr);
-  $("veil").classList.add("show");
+  openVeil("veil");
   confetti();
 }
-function hideResult() { $("veil").classList.remove("show"); }
+function hideResult() { closeVeil("veil"); }
 
 function confetti() {
   if (reduceMotion) return;
@@ -854,9 +887,8 @@ $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") { hideResult(); closeBonusModal(); closeSpotModal(); closeProfileModal(); closeGroupsModal(); closeUserMenu(); }
   if (e.code === "Space"
-      && !$("veil").classList.contains("show")
-      && !$("gate").classList.contains("show")
-      && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) {
+      && openModalCount === 0
+      && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement?.tagName || "")) {
     e.preventDefault();
     spin();
   }
@@ -938,8 +970,7 @@ function openBonusModal() {
   $("bonusImg").src = creative.src;
   $("bonusLink").href = creative.href;
   $("bonusTitle").textContent = creative.copy;
-  $("bonusVeil").classList.add("show");
-  $("bonusVeil").setAttribute("aria-hidden", "false");
+  openVeil("bonusVeil");
   $("bonusCloseBtn").disabled = true;
   $("bonusTimer").textContent = "廣告播放中…";
   clearTimeout(bonusCloseTimer);
@@ -950,8 +981,7 @@ function openBonusModal() {
 }
 function closeBonusModal() {
   clearTimeout(bonusCloseTimer);
-  $("bonusVeil").classList.remove("show");
-  $("bonusVeil").setAttribute("aria-hidden", "true");
+  closeVeil("bonusVeil");
 }
 async function claimAndCloseBonusModal() {
   if ($("bonusCloseBtn").disabled) return;
@@ -979,8 +1009,8 @@ function openSpotModal() {
   resetSpotForm();
   $("spotTitle").textContent = "新增地點到共享清單";
   $("spotSubmitBtn").textContent = "新增到共享清單";
-  $("spotVeil").classList.add("show");
-  $("spotVeil").setAttribute("aria-hidden", "false");
+  openVeil("spotVeil");
+  $("spotName").focus();
 }
 function openEditSpotModal(spot) {
   if (!auth.user) { openGate(); return; }
@@ -994,12 +1024,11 @@ function openEditSpotModal(spot) {
   $("spotPriceMax").value = spot.price[1];
   $("spotWalk").value = spot.walk;
   if (spot.ll) spotParsedLatLng = spot.ll;
-  $("spotVeil").classList.add("show");
-  $("spotVeil").setAttribute("aria-hidden", "false");
+  openVeil("spotVeil");
+  $("spotName").focus();
 }
 function closeSpotModal() {
-  $("spotVeil").classList.remove("show");
-  $("spotVeil").setAttribute("aria-hidden", "true");
+  closeVeil("spotVeil");
 }
 function resetSpotForm() {
   editingSpotId = null;
@@ -1037,6 +1066,10 @@ $("addSpotBtn").onclick = openSpotModal;
 $("spotCloseBtn").onclick = closeSpotModal;
 $("spotCancelBtn").onclick = closeSpotModal;
 $("spotVeil").onclick = e => { if (e.target === $("spotVeil")) closeSpotModal(); };
+/* 這些彈窗都沒有包在 <form> 裡，瀏覽器不會自動處理「按 Enter 送出」，
+   單一輸入框的表單就補上這個行為，多欄位的（新增地點本體）不加，
+   避免使用者只填一半就被 Enter 誤觸送出。 */
+$("spotQuickUrl").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("spotAutoFillBtn").click(); } });
 
 $("spotAutoFillBtn").onclick = async () => {
   const url = $("spotQuickUrl").value.trim();
@@ -1181,22 +1214,22 @@ async function loadSpinHistory() {
 
 function openProfileModal() {
   if (!auth.user) { openGate(); return; }
-  $("profileVeil").classList.add("show");
-  $("profileVeil").setAttribute("aria-hidden", "false");
+  openVeil("profileVeil");
   $("profileEmail").textContent = auth.user.email || "";
   $("profileNickname").value = myProfile.nickname || "";
   $("profileAvatarPreview").src = myProfile.avatar_url || AVATAR_FALLBACK;
   $("profileAvatarInput").value = "";
   setProfileMsg("", "");
   loadSpinHistory();
+  $("profileNickname").focus();
 }
 function closeProfileModal() {
-  $("profileVeil").classList.remove("show");
-  $("profileVeil").setAttribute("aria-hidden", "true");
+  closeVeil("profileVeil");
 }
 $("profileBtn").onclick = openProfileModal;
 $("profileCloseBtn").onclick = closeProfileModal;
 $("profileVeil").onclick = e => { if (e.target === $("profileVeil")) closeProfileModal(); };
+$("profileNickname").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("profileSaveBtn").click(); } });
 
 $("profileAvatarInput").onchange = () => {
   const file = $("profileAvatarInput").files[0];
@@ -1248,14 +1281,13 @@ function isMyGroupTurn() {
 
 function openGroupsModal() {
   if (!auth.user) { openGate(); return; }
-  $("groupsVeil").classList.add("show");
-  $("groupsVeil").setAttribute("aria-hidden", "false");
+  openVeil("groupsVeil");
   showGroupListView();
   loadMyGroups();
+  $("groupNameInput").focus();
 }
 function closeGroupsModal() {
-  $("groupsVeil").classList.remove("show");
-  $("groupsVeil").setAttribute("aria-hidden", "true");
+  closeVeil("groupsVeil");
 }
 $("groupsBtn").onclick = openGroupsModal;
 $("groupsCloseBtn").onclick = closeGroupsModal;
@@ -1298,6 +1330,7 @@ function renderGroupList() {
   }
 }
 
+$("groupNameInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("groupCreateBtn").click(); } });
 $("groupCreateBtn").onclick = async () => {
   const name = $("groupNameInput").value.trim();
   if (!name) { setGroupListMsg("請輸入群組名稱", "err"); return; }
@@ -1323,6 +1356,7 @@ async function openGroupDetail(groupId) {
   $("groupMemberList").innerHTML = "";
   $("groupDetailResult").hidden = true;
   setGroupDetailMsg("", "");
+  $("groupDetailBack").focus();
   await refreshGroupDetail(groupId);
 }
 
@@ -1412,6 +1446,7 @@ function updateGroupUseWheelBtn() {
 
 $("groupDetailBack").onclick = () => { showGroupListView(); loadMyGroups(); };
 
+$("groupAddEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("groupAddBtn").click(); } });
 $("groupAddBtn").onclick = async () => {
   const email = $("groupAddEmail").value.trim();
   if (!email) { setGroupDetailMsg("請輸入 email", "err"); return; }
@@ -1505,13 +1540,17 @@ function subscribeGroupResults() {
 /* ── 登入視窗 ── */
 function openGate() {
   if (auth.user) return;
-  $("gate").classList.add("show");
+  // openGate() 被很多地方防呆呼叫，只有真的從關到開那一刻才搶焦點，
+  // 不然使用者可能正在填密碼，卻被之後又觸發的 openGate() 打斷。
+  const wasOpen = $("gate").classList.contains("show");
+  openVeil("gate");
+  if (!wasOpen) $("gateEmail").focus();
   if (!CONFIGURED) {
     setGateMsg("尚未設定 Supabase：請在 index.html 頂端填入 SUPABASE_URL 與 ANON KEY", "err");
     $("gateSubmit").disabled = true;
   }
 }
-function closeGate() { $("gate").classList.remove("show"); }
+function closeGate() { closeVeil("gate"); }
 function setGateMsg(text, kind) {
   const m = $("gateMsg");
   m.textContent = text;
