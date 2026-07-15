@@ -467,7 +467,9 @@ let allCatsInData = [...new Set(RESTAURANTS.map(r => r.cat))]
   .sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
 
 const state = {
-  budget: store.budget ?? 1000,
+  // 夾在滑桿目前的 100–500 範圍內：舊版滑桿到 1000，瀏覽器裡可能還留著
+  // 超過 500 的舊設定，直接用會跟滑桿顯示的位置對不上。
+  budget: Math.min(500, Math.max(100, store.budget ?? 500)),
   walk: store.walk ?? 10,
   cats: new Set(Array.isArray(store.cats) ? store.cats.filter(c => allCatsInData.includes(c)) : allCatsInData),
   skipped: new Set(store.skipDate === todayKey && Array.isArray(store.skipped) ? store.skipped : []),
