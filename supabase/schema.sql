@@ -28,23 +28,25 @@ create policy "read own spins" on public.spins
   for select using (auth.uid() = user_id);
 -- 刻意不建立 insert policy：寫入只能透過下面的 record_spin() 函式。
 
--- ── ad_bonuses：看廣告換一次額外轉盤機會，每人每天最多領一次 ──
-create table if not exists public.ad_bonuses (
+-- ── bonus_spins：看廣告換一次額外轉盤機會，每人每天最多領一次 ──
+-- （命名刻意避開 "ad_" 開頭：瀏覽器的廣告攔截外掛常用 URL/選取器規則擋掉
+--   帶有 ad_ / ad- / banner 字樣的請求與元素，用這種命名會讓功能被誤擋。）
+create table if not exists public.bonus_spins (
   user_id    uuid not null references auth.users(id) on delete cascade,
   bonus_day  date not null default (now() at time zone 'Asia/Taipei')::date,
   granted_at timestamptz not null default now(),
   primary key (user_id, bonus_day)
 );
 
-alter table public.ad_bonuses enable row level security;
+alter table public.bonus_spins enable row level security;
 
-drop policy if exists "read own ad bonus" on public.ad_bonuses;
-create policy "read own ad bonus" on public.ad_bonuses
+drop policy if exists "read own bonus spin" on public.bonus_spins;
+create policy "read own bonus spin" on public.bonus_spins
   for select using (auth.uid() = user_id);
--- 刻意不建立 insert policy：寫入只能透過下面的 claim_ad_bonus() 函式。
+-- 刻意不建立 insert policy：寫入只能透過下面的 claim_bonus_spin() 函式。
 
--- ── claim_ad_bonus：領取當天的廣告加轉額度（只能領一次）──────
-create or replace function public.claim_ad_bonus()
+-- ── claim_bonus_spin：領取當天的廣告加轉額度（只能領一次）──────
+create or replace function public.claim_bonus_spin()
 returns json
 language plpgsql
 security definer
@@ -59,7 +61,7 @@ begin
     return json_build_object('ok', false, 'error', 'not_authenticated');
   end if;
 
-  insert into public.ad_bonuses (user_id, bonus_day)
+  insert into public.bonus_spins (user_id, bonus_day)
   values (v_uid, v_day)
   on conflict (user_id, bonus_day) do nothing
   returning true into v_new;
@@ -94,7 +96,7 @@ begin
    where user_id = v_uid and spin_day = v_day;
 
   select count(*) into v_bonus
-    from public.ad_bonuses
+    from public.bonus_spins
    where user_id = v_uid and bonus_day = v_day;
 
   v_limit := p_limit + v_bonus;
@@ -136,7 +138,7 @@ begin
    where user_id = v_uid and spin_day = v_day;
 
   select count(*) into v_bonus
-    from public.ad_bonuses
+    from public.bonus_spins
    where user_id = v_uid and bonus_day = v_day;
 
   v_limit := p_limit + v_bonus;
@@ -151,7 +153,7 @@ $$;
 -- ── 授權：只有登入使用者可呼叫，anon 不行 ─────────────────────
 revoke all on function public.record_spin(int)   from public, anon;
 revoke all on function public.spin_status(int)    from public, anon;
-revoke all on function public.claim_ad_bonus()    from public, anon;
+revoke all on function public.claim_bonus_spin()    from public, anon;
 grant execute on function public.record_spin(int) to authenticated;
 grant execute on function public.spin_status(int) to authenticated;
-grant execute on function public.claim_ad_bonus() to authenticated;
+grant execute on function public.claim_bonus_spin() to authenticated;

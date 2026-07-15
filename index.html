@@ -330,46 +330,46 @@
   .gate-card .btn[disabled] { opacity: .55; cursor: progress; }
 
   /* ── 廣告加轉視窗 ── */
-  .ad-veil {
+  .bonus-veil {
     position: fixed; inset: 0; z-index: 65; display: none;
     align-items: center; justify-content: center; padding: 20px;
     background: rgba(20, 16, 12, .6); backdrop-filter: blur(4px);
   }
-  .ad-veil.show { display: flex; }
-  .ad-card {
+  .bonus-veil.show { display: flex; }
+  .bonus-card {
     background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-lg);
     width: min(360px, 100%); padding: 22px; text-align: center; position: relative;
     display: flex; flex-direction: column; gap: 14px;
     animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
   }
-  .ad-card .close {
+  .bonus-card .close {
     position: absolute; top: 8px; right: 10px; background: none; border: none;
     font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px; z-index: 1;
   }
-  .ad-card .close[disabled] { opacity: .3; cursor: progress; }
-  .ad-media { position: relative; border-radius: 16px; overflow: hidden; line-height: 0; }
-  .ad-media img { width: 100%; display: block; aspect-ratio: 960 / 427; object-fit: cover; }
-  .ad-media .ad-tag {
+  .bonus-card .close[disabled] { opacity: .3; cursor: progress; }
+  .bonus-media { position: relative; border-radius: 16px; overflow: hidden; line-height: 0; }
+  .bonus-media img { width: 100%; display: block; aspect-ratio: 960 / 427; object-fit: cover; }
+  .bonus-media .bonus-tag {
     position: absolute; top: 10px; left: 10px; font-size: 11px; font-weight: 700; color: #fff;
     background: rgba(0,0,0,.45); border-radius: 999px; padding: 2px 9px;
   }
-  .ad-copy { font-size: 13px; color: var(--text-2); }
-  .ad-timer { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
-  .ad-card .btn[disabled] { opacity: .45; cursor: progress; }
+  .bonus-copy { font-size: 13px; color: var(--text-2); }
+  .bonus-timer { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .bonus-card .btn[disabled] { opacity: .45; cursor: progress; }
   @media (prefers-reduced-motion: reduce) { .gate-card { animation: none; } }
 
   /* ── 轉盤上的廣告加轉提示 ── */
-  .ad-invite {
+  .bonus-invite {
     position: absolute; inset: 0; z-index: 6; display: none;
     align-items: center; justify-content: center; text-align: center;
     background: color-mix(in srgb, var(--surface) 90%, transparent);
     border-radius: 50%; padding: 15%;
   }
-  .ad-invite:not([hidden]) { display: flex; }
-  .ad-invite-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .ad-invite-emoji { font-size: 32px; }
-  .ad-invite-text { font-size: 13px; color: var(--text-2); line-height: 1.5; }
-  .ad-invite .btn { padding: 10px 16px; font-size: 14px; }
+  .bonus-invite:not([hidden]) { display: flex; }
+  .bonus-invite-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .bonus-invite-emoji { font-size: 32px; }
+  .bonus-invite-text { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+  .bonus-invite .btn { padding: 10px 16px; font-size: 14px; }
 </style>
 
 <div class="app">
@@ -391,11 +391,11 @@
         <canvas id="wheel" width="1000" height="1000" aria-label="午餐轉輪"></canvas>
         <button class="hub" id="spinBtn">轉！</button>
         <div class="empty-note">沒有符合條件的店 😥<br>放寬一點預算或走路時間吧</div>
-        <div class="ad-invite" id="adInvite" hidden>
-          <div class="ad-invite-inner">
-            <div class="ad-invite-emoji">📺</div>
-            <div class="ad-invite-text">今天的次數用完了<br>看廣告多轉一次？</div>
-            <button class="btn btn-go" id="adBonusBtn">看廣告，多轉一次</button>
+        <div class="bonus-invite" id="bonusInvite" hidden>
+          <div class="bonus-invite-inner">
+            <div class="bonus-invite-emoji">📺</div>
+            <div class="bonus-invite-text">今天的次數用完了<br>看廣告多轉一次？</div>
+            <button class="btn btn-go" id="bonusWatchBtn">看廣告，多轉一次</button>
           </div>
         </div>
       </div>
@@ -473,17 +473,17 @@
   </div>
 </div>
 
-<div class="ad-veil" id="adVeil" aria-hidden="true">
-  <div class="ad-card" role="dialog" aria-modal="true" aria-labelledby="adTitle">
-    <button class="close" id="adCloseBtn" aria-label="關閉">×</button>
-    <div class="ad-media">
-      <span class="ad-tag">廣告</span>
+<div class="bonus-veil" id="bonusVeil" aria-hidden="true">
+  <div class="bonus-card" role="dialog" aria-modal="true" aria-labelledby="bonusTitle">
+    <button class="close" id="bonusCloseBtn" aria-label="關閉">×</button>
+    <div class="bonus-media">
+      <span class="bonus-tag">廣告</span>
       <a href="https://www.bankee.com.tw/event/LoanIntro/index.html" target="_blank" rel="noopener noreferrer">
-        <img src="assets/ad-banner.jpg" alt="遠銀 Bankee 廣告" width="960" height="427" loading="eager">
+        <img src="assets/bonus-offer.jpg" alt="遠銀 Bankee 廣告" width="960" height="427" loading="eager">
       </a>
     </div>
-    <div class="ad-copy" id="adTitle">🏦 遠銀 Bankee — 數位帳戶新戶好禮天天抽</div>
-    <div class="ad-timer" id="adTimer">廣告播放中…</div>
+    <div class="bonus-copy" id="bonusTitle">🏦 遠銀 Bankee — 數位帳戶新戶好禮天天抽</div>
+    <div class="bonus-timer" id="bonusTimer">廣告播放中…</div>
   </div>
 </div>
 
@@ -1200,7 +1200,7 @@ $("rSkip").onclick = () => {
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { hideResult(); closeAdModal(); }
+  if (e.key === "Escape") { hideResult(); closeBonusModal(); }
   if (e.code === "Space"
       && !$("veil").classList.contains("show")
       && !$("gate").classList.contains("show")
@@ -1229,13 +1229,13 @@ function flashOutOfSpins() {
 
 function updateQuota() {
   const badge = $("quotaBadge");
-  const adInvite = $("adInvite");
-  if (!auth.user || auth.remaining === null) { badge.hidden = true; adInvite.hidden = true; return; }
+  const bonusInvite = $("bonusInvite");
+  if (!auth.user || auth.remaining === null) { badge.hidden = true; bonusInvite.hidden = true; return; }
   const left = Math.max(0, auth.remaining);
   badge.hidden = false;
   badge.textContent = `今天還可轉 ${left}/${auth.limit} 次`;
   badge.classList.toggle("spent", left <= 0);
-  adInvite.hidden = !(left <= 0 && auth.bonusAvailable) || state.spinning;
+  bonusInvite.hidden = !(left <= 0 && auth.bonusAvailable) || state.spinning;
   if (left <= 0) flashOutOfSpins();
   else setHint(DEFAULT_HINT, false);
 }
@@ -1269,38 +1269,38 @@ async function fetchStatus() {
    1. 按「看廣告，多轉一次」開啟廣告視窗
    2. 廣告 banner 顯示 2 秒後才能按右上角 × 關閉（關閉時領取加轉額度）
    3. 點廣告 banner 本身會另開分頁到廣告網址，不會關閉視窗 */
-let adCloseTimer = null;
-function openAdModal() {
+let bonusCloseTimer = null;
+function openBonusModal() {
   if (!auth.user || !auth.bonusAvailable) return;
-  $("adVeil").classList.add("show");
-  $("adVeil").setAttribute("aria-hidden", "false");
-  $("adCloseBtn").disabled = true;
-  $("adTimer").textContent = "廣告播放中…";
-  clearTimeout(adCloseTimer);
-  adCloseTimer = setTimeout(() => {
-    $("adCloseBtn").disabled = false;
-    $("adTimer").textContent = "看完了嗎？按右上角 × 領取加轉";
+  $("bonusVeil").classList.add("show");
+  $("bonusVeil").setAttribute("aria-hidden", "false");
+  $("bonusCloseBtn").disabled = true;
+  $("bonusTimer").textContent = "廣告播放中…";
+  clearTimeout(bonusCloseTimer);
+  bonusCloseTimer = setTimeout(() => {
+    $("bonusCloseBtn").disabled = false;
+    $("bonusTimer").textContent = "看完了嗎？按右上角 × 領取加轉";
   }, 2000);
 }
-function closeAdModal() {
-  clearTimeout(adCloseTimer);
-  $("adVeil").classList.remove("show");
-  $("adVeil").setAttribute("aria-hidden", "true");
+function closeBonusModal() {
+  clearTimeout(bonusCloseTimer);
+  $("bonusVeil").classList.remove("show");
+  $("bonusVeil").setAttribute("aria-hidden", "true");
 }
-async function claimAndCloseAdModal() {
-  if ($("adCloseBtn").disabled) return;
-  $("adCloseBtn").disabled = true;
+async function claimAndCloseBonusModal() {
+  if ($("bonusCloseBtn").disabled) return;
+  $("bonusCloseBtn").disabled = true;
   try {
-    const { data, error } = await supabase.rpc("claim_ad_bonus");
-    closeAdModal();
+    const { data, error } = await supabase.rpc("claim_bonus_spin");
+    closeBonusModal();
     if (!error && data && data.ok) await fetchStatus();
   } catch (e) {
-    closeAdModal();
+    closeBonusModal();
   }
 }
-$("adBonusBtn").onclick = openAdModal;
-$("adCloseBtn").onclick = claimAndCloseAdModal;
-$("adVeil").onclick = e => { if (e.target === $("adVeil")) closeAdModal(); };
+$("bonusWatchBtn").onclick = openBonusModal;
+$("bonusCloseBtn").onclick = claimAndCloseBonusModal;
+$("bonusVeil").onclick = e => { if (e.target === $("bonusVeil")) closeBonusModal(); };
 
 /* ── 登入視窗 ── */
 function openGate() {
