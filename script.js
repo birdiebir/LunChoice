@@ -920,10 +920,24 @@ async function fetchStatus() {
 /* ── 廣告加轉 ──
    1. 按「看廣告，多轉一次」開啟廣告視窗
    2. 廣告 banner 顯示 2 秒後才能按右上角 × 關閉（關閉時領取加轉額度）
-   3. 點廣告 banner 本身會另開分頁到廣告網址，不會關閉視窗 */
+   3. 點廣告 banner 本身會另開分頁到廣告網址，不會關閉視窗
+   4. 每次開廣告視窗會跟上次輪替換一張素材（不是隨機，是照順序輪流） */
+const AD_CREATIVES = [
+  { src: "assets/bonus-offer.jpg", href: "https://www.bankee.com.tw/event/LoanIntro/index.html",
+    copy: "🏦 遠銀 Bankee — 數位帳戶新戶好禮天天抽" },
+  { src: "assets/bonus-offer-2.jpg", href: "https://www.bankee.com.tw/event/cd180Q2/index.html",
+    copy: "🏦 遠銀 Bankee — 新台幣 12 個月期定存，年利率 1.8%" },
+];
+let adCreativeIndex = 0;
+
 let bonusCloseTimer = null;
 function openBonusModal() {
   if (!auth.user || (!AD_TEST_MODE && !auth.bonusAvailable)) return;
+  const creative = AD_CREATIVES[adCreativeIndex % AD_CREATIVES.length];
+  adCreativeIndex++;
+  $("bonusImg").src = creative.src;
+  $("bonusLink").href = creative.href;
+  $("bonusTitle").textContent = creative.copy;
   $("bonusVeil").classList.add("show");
   $("bonusVeil").setAttribute("aria-hidden", "false");
   $("bonusCloseBtn").disabled = true;
