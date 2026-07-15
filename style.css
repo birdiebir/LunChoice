@@ -237,8 +237,6 @@
   }
   .r-edit-btn:hover { background: var(--accent-soft); color: var(--accent); }
 
-  footer.colophon { margin-top: 34px; font-size: var(--fs-xs); color: var(--text-2); text-align: center; letter-spacing: .5px; }
-
   /* ── result modal ── */
   .veil {
     position: fixed; inset: 0; z-index: 50; display: none;
