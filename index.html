@@ -153,10 +153,13 @@
     <h2 id="spotTitle">新增地點到共享清單</h2>
     <p class="spot-hint">貼 Google Maps 網址可以自動帶入店名、經緯度、估算走路時間（直線距離換算，僅供參考）；價位跟類別 Google 網址裡沒有這些資料，麻煩手動選一下。</p>
 
-    <div class="spot-quick">
-      <input type="url" id="spotQuickUrl" placeholder="貼上 Google Maps 網址…">
-      <button class="btn btn-again" id="spotAutoFillBtn" type="button">自動帶入</button>
-    </div>
+    <label class="spot-field">
+      <span>Google Maps 網址</span>
+      <div class="spot-quick">
+        <input type="url" id="spotQuickUrl" placeholder="貼上 Google Maps 網址…">
+        <button class="btn btn-again" id="spotAutoFillBtn" type="button">自動帶入</button>
+      </div>
+    </label>
     <div class="spot-quick-msg" id="spotQuickMsg"></div>
 
     <label class="spot-field">
@@ -180,10 +183,6 @@
     <label class="spot-field">
       <span>走路時間（分鐘）</span>
       <input type="number" id="spotWalk" min="0" max="240" step="1" placeholder="5">
-    </label>
-    <label class="spot-field">
-      <span>Google Maps 網址</span>
-      <input type="url" id="spotMapsUrl" placeholder="https://maps.app.goo.gl/…">
     </label>
 
     <div class="spot-msg" id="spotMsg" role="status" aria-live="polite"></div>

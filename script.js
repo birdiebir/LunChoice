@@ -668,7 +668,8 @@ function mapSharedRow(row) {
     walk: row.walk,
     addr: row.addr || "",
     note: row.note || "",
-    ll: (row.lat != null && row.lng != null) ? [row.lat, row.lng] : null
+    ll: (row.lat != null && row.lng != null) ? [row.lat, row.lng] : null,
+    mapsUrl: row.maps_url || ""
   };
 }
 
@@ -1025,6 +1026,7 @@ function openEditSpotModal(spot) {
   $("spotPriceMin").value = spot.price[0];
   $("spotPriceMax").value = spot.price[1];
   $("spotWalk").value = spot.walk;
+  $("spotQuickUrl").value = spot.mapsUrl || "";
   if (spot.ll) spotParsedLatLng = spot.ll;
   openVeil("spotVeil");
   $("spotName").focus();
@@ -1042,7 +1044,6 @@ function resetSpotForm() {
   $("spotPriceMin").value = "";
   $("spotPriceMax").value = "";
   $("spotWalk").value = "";
-  $("spotMapsUrl").value = "";
   setSpotMsg("", "");
   spotParsedLatLng = null;
 }
@@ -1089,7 +1090,7 @@ $("spotAutoFillBtn").onclick = async () => {
     });
     const data = await res.json();
     if (!data.ok) { msg.textContent = "網址解析失敗，麻煩手動填寫"; msg.className = "spot-quick-msg err"; return; }
-    $("spotMapsUrl").value = data.resolvedUrl || url;
+    $("spotQuickUrl").value = data.resolvedUrl || url;
     if (data.name) $("spotName").value = data.name;
     if (data.lat != null && data.lng != null) {
       spotParsedLatLng = [data.lat, data.lng];
@@ -1126,7 +1127,7 @@ $("spotSubmitBtn").onclick = async () => {
   const priceMin = Math.max(0, Math.round(+$("spotPriceMin").value || 0));
   const priceMax = Math.max(priceMin, Math.round(+$("spotPriceMax").value || priceMin));
   const walk = Math.max(0, Math.round(+$("spotWalk").value || 0));
-  const mapsUrl = $("spotMapsUrl").value.trim();
+  const mapsUrl = $("spotQuickUrl").value.trim();
 
   if (!name) { setSpotMsg("請填店名", "err"); return; }
 
@@ -1140,7 +1141,7 @@ $("spotSubmitBtn").onclick = async () => {
       const { error } = await supabase.from("shared_spots").update(payload).eq("id", editingSpotId);
       if (error) { setSpotMsg("儲存失敗：" + error.message, "err"); return; }
       patchLocalSharedSpot(editingSpotId, {
-        name, cat, price: [priceMin, priceMax], walk,
+        name, cat, price: [priceMin, priceMax], walk, mapsUrl,
         ll: spotParsedLatLng || sharedSpots.find(s => s.id === editingSpotId)?.ll || null
       });
       setSpotMsg("已儲存變更！", "ok");
