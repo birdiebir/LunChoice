@@ -346,6 +346,7 @@
     position: absolute; top: 8px; right: 10px; background: none; border: none;
     font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px; z-index: 1;
   }
+  .ad-card .close[disabled] { opacity: .3; cursor: progress; }
   .ad-media { position: relative; border-radius: 16px; overflow: hidden; line-height: 0; }
   .ad-media img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; }
   .ad-media .ad-tag {
@@ -482,8 +483,7 @@
       </a>
     </div>
     <div class="ad-copy" id="adTitle">🏦 遠銀 Bankee — 數位帳戶新戶好禮天天抽</div>
-    <div class="ad-timer" id="adTimer">廣告播放中… 3</div>
-    <button class="btn btn-go" id="adClaim" disabled>看完了，多轉一次！</button>
+    <div class="ad-timer" id="adTimer">廣告播放中…</div>
   </div>
 </div>
 
@@ -1265,48 +1265,42 @@ async function fetchStatus() {
   refresh();
 }
 
-/* ── 廣告加轉 ── */
-let adTimer = null;
+/* ── 廣告加轉 ──
+   1. 按「看廣告，多轉一次」開啟廣告視窗
+   2. 廣告 banner 顯示 2 秒後才能按右上角 × 關閉（關閉時領取加轉額度）
+   3. 點廣告 banner 本身會另開分頁到廣告網址，不會關閉視窗 */
+let adCloseTimer = null;
 function openAdModal() {
   if (!auth.user || !auth.bonusAvailable) return;
   $("adVeil").classList.add("show");
-  $("adClaim").disabled = true;
-  let secs = 3;
-  $("adTimer").textContent = `廣告播放中… ${secs}`;
-  clearInterval(adTimer);
-  adTimer = setInterval(() => {
-    secs -= 1;
-    if (secs <= 0) {
-      clearInterval(adTimer);
-      $("adTimer").textContent = "廣告播放完畢！";
-      $("adClaim").disabled = false;
-    } else {
-      $("adTimer").textContent = `廣告播放中… ${secs}`;
-    }
-  }, 1000);
+  $("adVeil").setAttribute("aria-hidden", "false");
+  $("adCloseBtn").disabled = true;
+  $("adTimer").textContent = "廣告播放中…";
+  clearTimeout(adCloseTimer);
+  adCloseTimer = setTimeout(() => {
+    $("adCloseBtn").disabled = false;
+    $("adTimer").textContent = "看完了嗎？按右上角 × 領取加轉";
+  }, 2000);
 }
 function closeAdModal() {
-  clearInterval(adTimer);
+  clearTimeout(adCloseTimer);
   $("adVeil").classList.remove("show");
+  $("adVeil").setAttribute("aria-hidden", "true");
 }
-$("adBonusBtn").onclick = openAdModal;
-$("adCloseBtn").onclick = closeAdModal;
-$("adVeil").onclick = e => { if (e.target === $("adVeil")) closeAdModal(); };
-$("adClaim").onclick = async () => {
-  $("adClaim").disabled = true;
+async function claimAndCloseAdModal() {
+  if ($("adCloseBtn").disabled) return;
+  $("adCloseBtn").disabled = true;
   try {
     const { data, error } = await supabase.rpc("claim_ad_bonus");
-    if (!error && data && data.ok) {
-      closeAdModal();
-      await fetchStatus();
-    } else {
-      $("adTimer").textContent = "今天的廣告加轉額度已經領過了";
-    }
+    closeAdModal();
+    if (!error && data && data.ok) await fetchStatus();
   } catch (e) {
-    $("adTimer").textContent = "連線發生問題，請稍後再試";
-    $("adClaim").disabled = false;
+    closeAdModal();
   }
-};
+}
+$("adBonusBtn").onclick = openAdModal;
+$("adCloseBtn").onclick = claimAndCloseAdModal;
+$("adVeil").onclick = e => { if (e.target === $("adVeil")) closeAdModal(); };
 
 /* ── 登入視窗 ── */
 function openGate() {
