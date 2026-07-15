@@ -1,27 +1,27 @@
   /* ══════════════════════════════════════════════════════════
      設計系統 Design Tokens
-     配色取自品牌參考素材（design-style1／design-style2）：
-     紫（--accent）是品牌主色，綠（--action）是主要行動按鈕色 —
-     兩張參考圖裡分別是背景／logo 的紫，跟 CTA 按鈕的綠。
+     配色：藍白極簡風。--accent／--action 都在同一個藍色家族裡
+     （--action 是主按鈕用的正藍，--accent 是輔助強調用的中藍），
+     搭大量白／淺灰藍留白，不再套用先前品牌參考素材的紫綠配色。
      ══════════════════════════════════════════════════════════ */
   :root {
     /* 顏色（亮色） */
-    --bg: #FAF8FF;
+    --bg: #F6F9FD;
     --surface: #FFFFFF;
-    --surface-2: #F4F0FC;
-    --text: #1F1B2E;
-    --text-2: #6E6580;
-    --line: #E8E2F5;
-    --accent: #7C4FD9;
-    --accent-soft: #F0EAFC;
+    --surface-2: #EEF3FA;
+    --text: #16233A;
+    --text-2: #5B6B80;
+    --line: #DCE6F2;
+    --accent: #2563EB;
+    --accent-soft: #E8F0FE;
     --accent-ink: #FFFFFF;
-    --action: #7CC93E;
-    --action-hover: #6FB236;
-    --action-ink: #1F1B2E;
+    --action: #2458D6;
+    --action-hover: #1D46B0;
+    --action-ink: #FFFFFF;
     --amber: #E8A33D;
-    --chip-bg: #F0ECFA;
-    --shadow: 0 10px 30px rgba(124, 79, 217, .12);
-    --shadow-lg: 0 18px 50px rgba(124, 79, 217, .20);
+    --chip-bg: #EEF3FA;
+    --shadow: 0 10px 30px rgba(37, 99, 235, .10);
+    --shadow-lg: 0 18px 50px rgba(37, 99, 235, .16);
 
     /* 圓角弧度 */
     --radius-sm: 8px;
@@ -38,57 +38,57 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #1A1625;
-      --surface: #241E33;
-      --surface-2: #2B2440;
-      --text: #F0EAFB;
-      --text-2: #A99BC7;
-      --line: #392F52;
-      --accent: #A480F0;
-      --accent-soft: #332A52;
-      --accent-ink: #1A1625;
-      --action: #8FE352;
-      --action-hover: #7DD43F;
-      --action-ink: #1A1625;
+      --bg: #0B1220;
+      --surface: #131B2C;
+      --surface-2: #182238;
+      --text: #E7EEF9;
+      --text-2: #8FA1BC;
+      --line: #23304A;
+      --accent: #6FA1FF;
+      --accent-soft: #1C2A47;
+      --accent-ink: #0B1220;
+      --action: #4C8DFF;
+      --action-hover: #6FA1FF;
+      --action-ink: #0B1220;
       --amber: #E0A54E;
-      --chip-bg: #332A52;
+      --chip-bg: #182238;
       --shadow: 0 10px 30px rgba(0, 0, 0, .35);
       --shadow-lg: 0 18px 50px rgba(0, 0, 0, .5);
     }
   }
   :root[data-theme="light"] {
-    --bg: #FAF8FF;
+    --bg: #F6F9FD;
     --surface: #FFFFFF;
-    --surface-2: #F4F0FC;
-    --text: #1F1B2E;
-    --text-2: #6E6580;
-    --line: #E8E2F5;
-    --accent: #7C4FD9;
-    --accent-soft: #F0EAFC;
+    --surface-2: #EEF3FA;
+    --text: #16233A;
+    --text-2: #5B6B80;
+    --line: #DCE6F2;
+    --accent: #2563EB;
+    --accent-soft: #E8F0FE;
     --accent-ink: #FFFFFF;
-    --action: #7CC93E;
-    --action-hover: #6FB236;
-    --action-ink: #1F1B2E;
+    --action: #2458D6;
+    --action-hover: #1D46B0;
+    --action-ink: #FFFFFF;
     --amber: #E8A33D;
-    --chip-bg: #F0ECFA;
-    --shadow: 0 10px 30px rgba(124, 79, 217, .12);
-    --shadow-lg: 0 18px 50px rgba(124, 79, 217, .20);
+    --chip-bg: #EEF3FA;
+    --shadow: 0 10px 30px rgba(37, 99, 235, .10);
+    --shadow-lg: 0 18px 50px rgba(37, 99, 235, .16);
   }
   :root[data-theme="dark"] {
-    --bg: #1A1625;
-    --surface: #241E33;
-    --surface-2: #2B2440;
-    --text: #F0EAFB;
-    --text-2: #A99BC7;
-    --line: #392F52;
-    --accent: #A480F0;
-    --accent-soft: #332A52;
-    --accent-ink: #1A1625;
-    --action: #8FE352;
-    --action-hover: #7DD43F;
-    --action-ink: #1A1625;
+    --bg: #0B1220;
+    --surface: #131B2C;
+    --surface-2: #182238;
+    --text: #E7EEF9;
+    --text-2: #8FA1BC;
+    --line: #23304A;
+    --accent: #6FA1FF;
+    --accent-soft: #1C2A47;
+    --accent-ink: #0B1220;
+    --action: #4C8DFF;
+    --action-hover: #6FA1FF;
+    --action-ink: #0B1220;
     --amber: #E0A54E;
-    --chip-bg: #332A52;
+    --chip-bg: #182238;
     --shadow: 0 10px 30px rgba(0, 0, 0, .35);
     --shadow-lg: 0 18px 50px rgba(0, 0, 0, .5);
   }
