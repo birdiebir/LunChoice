@@ -724,7 +724,7 @@ async function spin() {
   if (!CONFIGURED) { openGate(); return; }
   if (!auth.user) { openGate(); return; }
   if (activeGroup && !isMyGroupTurn()) { setHint("今天不是輪到你，等輪到你再轉吧 🍚", true); return; }
-  if (outOfSpins()) { flashOutOfSpins(); return; }
+  if (outOfSpins()) return;
 
   auth.busy = true;
   refresh();
@@ -735,7 +735,6 @@ async function spin() {
     if (res && res.error === "limit_reached") {
       auth.remaining = 0;
       updateQuota();
-      flashOutOfSpins();
     } else {
       setHint("⚠️ 連線發生問題，請稍後再試", true);
     }
@@ -813,7 +812,7 @@ function showResult(r) {
   $("rBadges").innerHTML = `
     <span class="badge">${CAT_EMOJI[r.cat] || ""} ${r.cat}</span>
     <span class="badge money">NT$${r.price[0]}–${r.price[1]}</span>
-    <span class="badge">🚶 走路約 ${r.walk} 分鐘</span>`;
+    <span class="badge">🚶 ${r.walk} 分鐘</span>`;
   $("rAddr").textContent = r.addr;
   $("rNote").textContent = r.note || "";
   $("rNote").style.display = r.note ? "" : "none";
@@ -887,11 +886,6 @@ function setHint(html, warn) {
   $("hint").style.color = warn ? "var(--action)" : "";
 }
 
-function flashOutOfSpins() {
-  const extra = auth.bonusAvailable ? "，轉盤上可以看廣告多轉一次" : "，明天再來吧 🌙";
-  setHint(`今天的 ${auth.limit} 次轉盤機會已經用完${extra}`, true);
-}
-
 function updateQuota() {
   const badge = $("quotaBadge");
   const bonusInvite = $("bonusInvite");
@@ -901,8 +895,7 @@ function updateQuota() {
   badge.textContent = `今天還可轉 ${left} 次`;
   badge.classList.toggle("spent", left <= 0);
   bonusInvite.hidden = AD_TEST_MODE ? state.spinning : (!(left <= 0 && auth.bonusAvailable) || state.spinning);
-  if (left <= 0) flashOutOfSpins();
-  else setHint(DEFAULT_HINT, false);
+  setHint(DEFAULT_HINT, false);
 }
 
 /* 向伺服器登記一次轉盤（原子操作，超過上限會被擋下） */
