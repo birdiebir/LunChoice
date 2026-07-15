@@ -923,12 +923,16 @@ $("originGpsBtn").onclick = () => {
   setOriginMsg("定位中…", "");
   navigator.geolocation.getCurrentPosition(
     async pos => {
-      customOrigin = [pos.coords.latitude, pos.coords.longitude];
+      const thisOrigin = [pos.coords.latitude, pos.coords.longitude];
+      customOrigin = thisOrigin;
       $("originGpsBtn").disabled = false;
       syncOriginTabs();
       setOriginMsg("已套用目前位置，查詢地址中…（預設轉盤／共享轉盤的走路時間都已重算，直線距離估算，非實際路線）", "ok");
       refresh();
-      const address = await reverseGeocode(customOrigin[0], customOrigin[1]);
+      const address = await reverseGeocode(thisOrigin[0], thisOrigin[1]);
+      // 查地址的這段時間，使用者可能已經切回預設出發點或重新定位過了——
+      // customOrigin 這時已經不是同一個參照，代表這次查詢結果過期了，不要覆蓋畫面。
+      if (customOrigin !== thisOrigin) return;
       setOriginMsg(
         address
           ? `目前位置：${address}（預設轉盤／共享轉盤的走路時間都已重算，直線距離估算，非實際路線）`
