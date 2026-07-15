@@ -500,13 +500,13 @@ function recomputeCatsInData() {
 
 const avg = r => (r.price[0] + r.price[1]) / 2;
 
-/* 自訂出發點：只影響「預設轉盤」。共享轉盤的走路時間是使用者新增/編輯
-   當下自己存的值（對應各自貼的 Google Maps 網址），維持原樣不重算。 */
+/* 自訂出發點：預設轉盤／共享轉盤都適用。出發點是預設值（基隆路一段
+   200 號）時，兩邊都用原本存的 walk（預設轉盤是人工判別過的、共享
+   轉盤是新增/編輯當下依當時出發點算出來存的）；切到「目前位置」才
+   會拿座標即時重算。 */
 let customOrigin = null; // [lat, lng] | null
 const walkMinutesFor = r =>
-  (state.wheelMode === "shared" || !customOrigin || !r.ll)
-    ? r.walk
-    : estimateWalkMinutes(r.ll[0], r.ll[1], customOrigin);
+  (!customOrigin || !r.ll) ? r.walk : estimateWalkMinutes(r.ll[0], r.ll[1], customOrigin);
 
 const eligible = () => activeList().filter(r =>
   avg(r) <= state.budget && walkMinutesFor(r) <= state.walk && state.cats.has(r.cat)
@@ -712,7 +712,6 @@ function syncWheelModeUI() {
   $("tabShared").classList.toggle("on", mode === "shared");
   $("tabShared").setAttribute("aria-selected", String(mode === "shared"));
   $("addSpotBtn").hidden = mode !== "shared";
-  $("originField").hidden = mode !== "default";
 }
 function setWheelMode(mode) {
   if (state.wheelMode === mode) return;
@@ -868,7 +867,18 @@ $("walk").oninput = e => {
   $("walkOut").textContent = state.walk + " 分鐘";
   refresh();
 };
-$("allCats").onclick = () => { allCatsInData.forEach(c => state.cats.add(c)); refresh(); };
+/* 全選＝真的顯示所有店，不只是選滿類別——預算跟走路時間上限也一起
+   拉到滑桿最大值，不然類別選滿了還是可能被預算/走路時間篩掉一部分。 */
+$("allCats").onclick = () => {
+  allCatsInData.forEach(c => state.cats.add(c));
+  state.budget = +$("budget").max;
+  $("budget").value = state.budget;
+  $("budgetOut").textContent = "NT$" + state.budget;
+  state.walk = +$("walk").max;
+  $("walk").value = state.walk;
+  $("walkOut").textContent = state.walk + " 分鐘";
+  refresh();
+};
 
 /* 自訂出發點：只是這次先試做的版本，用瀏覽器定位（Geolocation），
    不存 localStorage——重新整理就回到預設出發點，避免帶著過期的舊定位。 */
@@ -884,11 +894,27 @@ function syncOriginTabs() {
   $("originGpsBtn").classList.toggle("on", usingGps);
   $("originGpsBtn").setAttribute("aria-selected", String(usingGps));
 }
+/* 反查地址用 OpenStreetMap 的 Nominatim（免金鑰的免費服務），失敗就回 null，
+   前端只顯示座標換算的結果、不會整個功能掛掉。 */
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&accept-language=zh-TW`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.display_name) return null;
+    // display_name 常常落落長一路列到國家，只取比較有意義的前幾段
+    return data.display_name.split(",").map(s => s.trim()).slice(0, 3).join("，");
+  } catch (e) {
+    return null;
+  }
+}
 $("originDefaultBtn").onclick = () => {
   if (!customOrigin) return;
   customOrigin = null;
   syncOriginTabs();
-  setOriginMsg("走路時間會跟著重算，只影響預設轉盤（直線距離估算，非實際路線）；共享轉盤地點維持原本存的資料", "");
+  setOriginMsg("預設轉盤／共享轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）", "");
   refresh();
 };
 $("originGpsBtn").onclick = () => {
@@ -896,12 +922,19 @@ $("originGpsBtn").onclick = () => {
   $("originGpsBtn").disabled = true;
   setOriginMsg("定位中…", "");
   navigator.geolocation.getCurrentPosition(
-    pos => {
+    async pos => {
       customOrigin = [pos.coords.latitude, pos.coords.longitude];
       $("originGpsBtn").disabled = false;
       syncOriginTabs();
-      setOriginMsg("已套用目前位置，預設轉盤的走路時間跟著重算（直線距離估算，非實際路線）", "ok");
+      setOriginMsg("已套用目前位置，查詢地址中…（預設轉盤／共享轉盤的走路時間都已重算，直線距離估算，非實際路線）", "ok");
       refresh();
+      const address = await reverseGeocode(customOrigin[0], customOrigin[1]);
+      setOriginMsg(
+        address
+          ? `目前位置：${address}（預設轉盤／共享轉盤的走路時間都已重算，直線距離估算，非實際路線）`
+          : "已套用目前位置，預設轉盤／共享轉盤的走路時間都跟著重算（直線距離估算，非實際路線；地址查詢失敗）",
+        "ok"
+      );
     },
     () => {
       $("originGpsBtn").disabled = false;

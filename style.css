@@ -65,10 +65,6 @@
   }
   .brand.spinning .zhuan { animation: zhuan-spin 1s linear infinite; }
   @keyframes zhuan-spin { to { transform: rotate(360deg); } }
-  .locale {
-    font-size: var(--fs-md); color: var(--text-2); letter-spacing: 1px;
-  }
-  .locale strong { color: var(--accent); font-weight: 700; }
 
   /* ── layout ── */
   main.board { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
