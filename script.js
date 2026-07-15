@@ -1131,6 +1131,11 @@ $("spotVeil").onclick = e => { if (e.target === $("spotVeil")) closeSpotModal();
    單一輸入框的表單就補上這個行為，多欄位的（新增地點本體）不加，
    避免使用者只填一半就被 Enter 誤觸送出。 */
 $("spotQuickUrl").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("spotAutoFillBtn").click(); } });
+/* 編輯時如果手動改掉網址文字（沒有重新按自動帶入），舊的經緯度就不該
+   再跟著送出去——不然會變成「網址說一個地方，座標卻是另一個地方」
+   的資料不一致。程式改 .value（自動帶入寫回去那次）不會觸發 input
+   事件，所以這裡只會抓到使用者自己打字/貼上造成的變動。 */
+$("spotQuickUrl").addEventListener("input", () => { spotParsedLatLng = null; });
 
 $("spotAutoFillBtn").onclick = async () => {
   const url = $("spotQuickUrl").value.trim();
