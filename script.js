@@ -898,7 +898,32 @@ async function recordSpinOutcome(winner, spinId) {
 }
 
 /* ══════════ 結果 ══════════ */
+/* 分享用 Web Share API（手機上會直接叫出 LINE／訊息等分享面板，符合
+   台灣情境）；不支援的瀏覽器（多數桌機）退回複製文字到剪貼簿，
+   按鈕文字短暫改成「已複製」當作回饋（功能建議 #3）。使用者自己按
+   取消分享（AbortError）不算失敗，不用退回複製。 */
+async function shareResult(text, url, btn) {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "午餐大轉輪", text, url });
+      return;
+    } catch (e) {
+      if (e.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url ? `${text} ${url}` : text);
+    if (btn) {
+      const original = btn.textContent;
+      btn.textContent = "已複製，可以貼到 LINE 囉！";
+      setTimeout(() => { if (btn.isConnected) btn.textContent = original; }, 2000);
+    }
+  } catch (e) {}
+}
+
+let currentResult = null;
 function showResult(r) {
+  currentResult = r;
   $("rTitle").textContent = r.name;
   $("rBadges").innerHTML = `
     <span class="badge">${CAT_EMOJI[r.cat] || ""} ${r.cat}</span>
@@ -1040,6 +1065,10 @@ $("originGpsBtn").onclick = () => {
 bindTabArrowKeys([$("originDefaultBtn"), $("originGpsBtn")], tab => tab.click());
 $("spinBtn").onclick = spin;
 $("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
+$("rShareBtn").onclick = () => {
+  if (!currentResult) return;
+  shareResult(`今天午餐吃：${currentResult.name} 🍽️`, $("rMap").href, $("rShareBtn"));
+};
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
@@ -1854,9 +1883,11 @@ function syncGroupBanner() {
    today_result 只存店名字串，跟個人轉盤一樣以名字比對回目前的資料來源
    （預設或共享清單）找出完整資料；找不到（例如共享地點後來被刪掉／改名）
    就退回只用店名查 Google 地圖，仍然給得出地圖按鈕，只是沒有價位等細節。 */
+let currentGroupResultName = null;
 function openGroupResultDetail(detail) {
   if (!detail || !detail.today_result) return;
   const { winner_name, wheel_mode, spinner_id, created_at } = detail.today_result;
+  currentGroupResultName = winner_name;
   const list = wheel_mode === "shared" ? sharedSpots : RESTAURANTS;
   const r = list.find(x => x.name === winner_name) || null;
   const modeTag = wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
@@ -1894,6 +1925,10 @@ function openGroupResultDetail(detail) {
   $("groupResultDialog").focus();
 }
 $("groupResultCloseBtn").onclick = () => closeVeil("groupResultVeil");
+$("groupResultShareBtn").onclick = () => {
+  if (!currentGroupResultName) return;
+  shareResult(`今天大家跟著吃：${currentGroupResultName} 🍚`, $("groupResultMap").href, $("groupResultShareBtn"));
+};
 $("groupResultVeil").onclick = e => { if (e.target === $("groupResultVeil")) closeVeil("groupResultVeil"); };
 
 async function refreshActiveGroupStatus() {
