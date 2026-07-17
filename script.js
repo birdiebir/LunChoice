@@ -1495,8 +1495,16 @@ async function openGroupDetail(groupId) {
   $("groupMemberList").innerHTML = "";
   $("groupDetailResult").hidden = true;
   setGroupDetailMsg("", "");
+  resetGroupLeaveBtn();
   $("groupDetailBack").focus();
   await refreshGroupDetail(groupId);
+}
+
+function resetGroupLeaveBtn() {
+  const btn = $("groupLeaveBtn");
+  btn.dataset.armed = "0";
+  btn.textContent = "退出這個飯搭子圈";
+  btn.classList.remove("confirm");
 }
 
 async function refreshGroupDetail(groupId) {
@@ -1564,6 +1572,38 @@ async function removeGroupMember(groupId, userId) {
     setGroupDetailMsg("已移除成員", "ok");
     await refreshGroupDetail(groupId);
     await loadMyGroups();
+  } catch (e) {
+    setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+  }
+}
+
+/* 退出也要點兩次確認，理由同 armOrRemoveGroupMember：如果退出的是圈主，
+   後端 leave_group() 會把圈主資格轉給下一位，或（沒人剩下時）直接刪掉
+   整個群組，比移除成員更不可逆，更該防手滑。 */
+$("groupLeaveBtn").onclick = () => {
+  const btn = $("groupLeaveBtn");
+  if (!currentGroupDetail) return;
+  if (btn.dataset.armed === "1") {
+    leaveGroup(currentGroupDetail.group_id);
+    return;
+  }
+  btn.dataset.armed = "1";
+  btn.textContent = "確定要退出嗎？再按一次確認";
+  btn.classList.add("confirm");
+  setTimeout(() => {
+    if (btn.isConnected) resetGroupLeaveBtn();
+  }, 2500);
+};
+
+async function leaveGroup(groupId) {
+  setGroupDetailMsg("退出中…", "");
+  try {
+    const { data, error } = await supabase.rpc("leave_group", { p_group_id: groupId });
+    if (error || !data || !data.ok) { setGroupDetailMsg("退出失敗，請稍後再試", "err"); return; }
+    if (activeGroup && activeGroup.group_id === groupId) leaveGroupMode();
+    showGroupListView();
+    await loadMyGroups();
+    await loadAllGroups();
   } catch (e) {
     setGroupDetailMsg("連線發生問題，請稍後再試", "err");
   }

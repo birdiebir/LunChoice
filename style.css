@@ -582,6 +582,11 @@
   }
   .group-today-result:hover, .group-today-result:focus-visible { filter: brightness(0.97); }
   #groupUseWheelBtn { width: 100%; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .group-leave-btn {
+    background: none; border: none; color: var(--action); font: inherit; font-size: var(--fs-sm);
+    cursor: pointer; text-decoration: underline; padding: 10px 0 2px; width: 100%; text-align: center;
+  }
+  .group-leave-btn.confirm { font-weight: 700; }
 
   /* ── 轉盤上的廣告加轉提示 ── */
   .bonus-invite {

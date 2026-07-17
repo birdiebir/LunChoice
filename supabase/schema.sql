@@ -610,6 +610,52 @@ $$;
 revoke all on function public.remove_group_member(bigint, uuid) from public, anon;
 grant execute on function public.remove_group_member(bigint, uuid) to authenticated;
 
+-- ── leave_group：成員自行退出飯搭子圈（不限圈主或一般成員）。退出的
+--    若是圈主，且群組還有其他成員，圈主資格轉給加入時間最早的下一位；
+--    退出後沒人了就直接刪掉整個群組（group_members／group_spin_results
+--    都設了 on delete cascade，會一起清掉）──────────────────────
+create or replace function public.leave_group(p_group_id bigint)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid       uuid := auth.uid();
+  v_is_member boolean;
+  v_owner     uuid;
+  v_next      uuid;
+begin
+  if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
+
+  select exists(select 1 from public.group_members where group_id = p_group_id and user_id = v_uid)
+    into v_is_member;
+  if not v_is_member then return json_build_object('ok', false, 'error', 'not_a_member'); end if;
+
+  select created_by into v_owner from public.meal_groups where id = p_group_id;
+
+  delete from public.group_members where group_id = p_group_id and user_id = v_uid;
+
+  if v_owner = v_uid then
+    select user_id into v_next
+      from public.group_members
+     where group_id = p_group_id
+     order by joined_at
+     limit 1;
+
+    if v_next is null then
+      delete from public.meal_groups where id = p_group_id;
+    else
+      update public.meal_groups set created_by = v_next where id = p_group_id;
+    end if;
+  end if;
+
+  return json_build_object('ok', true);
+end;
+$$;
+revoke all on function public.leave_group(bigint) from public, anon;
+grant execute on function public.leave_group(bigint) to authenticated;
+
 -- ── record_group_result：轉盤人回填今天的結果，內部驗證真的輪到你 ──
 create or replace function public.record_group_result(p_group_id bigint, p_winner_name text, p_wheel_mode text default 'default')
 returns json
