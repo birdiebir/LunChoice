@@ -85,19 +85,24 @@ $$;
 
 -- ── record_spin：登記一次轉盤（超過上限會被擋下，含廣告加轉額度）
 -- 回傳的 spin_id 給前端在動畫跑完後呼叫 set_spin_result() 回填轉到誰。
-create or replace function public.record_spin(p_limit int default 3)
+-- 每日基礎上限「3」是函式內部寫死的常數，不接受呼叫端傳入——舊版本
+-- 曾經開放 p_limit 參數由前端決定，DevTools 直接改參數就能無限轉盤，
+-- 等於後端形同虛設，故拿掉參數改成硬編（issue #001）。
+drop function if exists public.record_spin(int);
+create or replace function public.record_spin()
 returns json
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_uid     uuid := auth.uid();
-  v_day     date := (now() at time zone 'Asia/Taipei')::date;
-  v_used    int;
-  v_bonus   int;
-  v_limit   int;
-  v_spin_id bigint;
+  v_uid        uuid := auth.uid();
+  v_day        date := (now() at time zone 'Asia/Taipei')::date;
+  v_used       int;
+  v_bonus      int;
+  v_base_limit constant int := 3;
+  v_limit      int;
+  v_spin_id    bigint;
 begin
   if v_uid is null then
     return json_build_object('ok', false, 'error', 'not_authenticated');
@@ -114,7 +119,7 @@ begin
     from public.bonus_spins
    where user_id = v_uid and bonus_day = v_day;
 
-  v_limit := p_limit + v_bonus;
+  v_limit := v_base_limit + v_bonus;
 
   if v_used >= v_limit then
     return json_build_object(
@@ -148,7 +153,7 @@ begin
 
   update public.spins
      set winner_name = left(p_winner_name, 120),
-         wheel_mode  = coalesce(nullif(trim(p_wheel_mode), ''), 'default')
+         wheel_mode  = left(coalesce(nullif(trim(p_wheel_mode), ''), 'default'), 40)
    where id = p_spin_id and user_id = v_uid and winner_name is null;
 
   get diagnostics v_n = row_count;
@@ -157,18 +162,21 @@ end;
 $$;
 
 -- ── spin_status：只讀取剩餘次數與廣告額度是否還能領，不消耗 ──
-create or replace function public.spin_status(p_limit int default 3)
+-- 同 record_spin：上限是內部常數，不接受呼叫端傳入（issue #001）。
+drop function if exists public.spin_status(int);
+create or replace function public.spin_status()
 returns json
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_uid   uuid := auth.uid();
-  v_day   date := (now() at time zone 'Asia/Taipei')::date;
-  v_used  int;
-  v_bonus int;
-  v_limit int;
+  v_uid        uuid := auth.uid();
+  v_day        date := (now() at time zone 'Asia/Taipei')::date;
+  v_used       int;
+  v_bonus      int;
+  v_base_limit constant int := 3;
+  v_limit      int;
 begin
   if v_uid is null then
     return json_build_object('ok', false, 'error', 'not_authenticated');
@@ -182,7 +190,7 @@ begin
     from public.bonus_spins
    where user_id = v_uid and bonus_day = v_day;
 
-  v_limit := p_limit + v_bonus;
+  v_limit := v_base_limit + v_bonus;
 
   return json_build_object(
     'ok', true,
@@ -192,12 +200,12 @@ end;
 $$;
 
 -- ── 授權：只有登入使用者可呼叫，anon 不行 ─────────────────────
-revoke all on function public.record_spin(int)              from public, anon;
-revoke all on function public.spin_status(int)               from public, anon;
+revoke all on function public.record_spin()              from public, anon;
+revoke all on function public.spin_status()               from public, anon;
 revoke all on function public.claim_bonus_spin()             from public, anon;
 revoke all on function public.set_spin_result(bigint, text, text) from public, anon;
-grant execute on function public.record_spin(int)            to authenticated;
-grant execute on function public.spin_status(int)             to authenticated;
+grant execute on function public.record_spin()            to authenticated;
+grant execute on function public.spin_status()             to authenticated;
 grant execute on function public.claim_bonus_spin()           to authenticated;
 grant execute on function public.set_spin_result(bigint, text, text) to authenticated;
 
@@ -221,8 +229,20 @@ create table if not exists public.shared_spots (
   created_at timestamptz not null default now(),
   constraint shared_spots_name_len check (char_length(trim(name)) > 0 and char_length(name) <= 80),
   constraint shared_spots_walk_range check (walk >= 0 and walk <= 240),
-  constraint shared_spots_price_range check (price_min >= 0 and price_max >= price_min)
+  constraint shared_spots_price_range check (price_min >= 0 and price_max >= price_min),
+  constraint shared_spots_addr_len check (char_length(addr) <= 200),
+  constraint shared_spots_note_len check (char_length(note) <= 500),
+  constraint shared_spots_maps_url_len check (char_length(maps_url) <= 500)
 );
+
+-- 既有資料表（第一次跑這份 schema 之後才加的欄位限制）用 alter 補上，
+-- create table if not exists 對已存在的表不會套用新的 constraint（issue #016）。
+alter table public.shared_spots drop constraint if exists shared_spots_addr_len;
+alter table public.shared_spots add constraint shared_spots_addr_len check (char_length(addr) <= 200);
+alter table public.shared_spots drop constraint if exists shared_spots_note_len;
+alter table public.shared_spots add constraint shared_spots_note_len check (char_length(note) <= 500);
+alter table public.shared_spots drop constraint if exists shared_spots_maps_url_len;
+alter table public.shared_spots add constraint shared_spots_maps_url_len check (char_length(maps_url) <= 500);
 
 create index if not exists shared_spots_created_at_idx on public.shared_spots (created_at);
 
@@ -243,6 +263,24 @@ drop policy if exists "any member can update shared spot" on public.shared_spots
 create policy "any member can update shared spot" on public.shared_spots
   for update using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+-- update policy 只檢查「有沒有登入」，沒限制哪些欄位能改——任何登入者
+-- 理論上都能把 created_by 改成別人、變成冒名栽贓。用 trigger 把
+-- created_by 鎖死在原值，維基式共編仍然開放，只是不能篡改是誰建立的
+-- （issue #016）。
+create or replace function public.shared_spots_lock_created_by()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.created_by := old.created_by;
+  return new;
+end;
+$$;
+drop trigger if exists shared_spots_lock_created_by_trg on public.shared_spots;
+create trigger shared_spots_lock_created_by_trg
+before update on public.shared_spots
+for each row execute function public.shared_spots_lock_created_by();
 
 revoke all on public.shared_spots from public, anon;
 grant select, insert, update on public.shared_spots to authenticated;
@@ -320,13 +358,21 @@ create policy "avatar owner delete" on storage.objects
   for delete using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- ── meal_groups / group_members：飯搭子圈 ─────────────────────
+-- created_by 用 on delete set null（不是 cascade）：圈主刪除自己的帳號
+-- 不該連帶把其他無辜成員的群組、歷史紀錄整個炸掉（issue #019）。
 create table if not exists public.meal_groups (
   id         bigint generated always as identity primary key,
   name       text not null,
-  created_by uuid not null references auth.users(id) on delete cascade,
+  created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   constraint meal_groups_name_len check (char_length(trim(name)) > 0 and char_length(name) <= 60)
 );
+
+-- 既有資料表可能還是舊的 not null + cascade，補 alter 修正（issue #019）。
+alter table public.meal_groups alter column created_by drop not null;
+alter table public.meal_groups drop constraint if exists meal_groups_created_by_fkey;
+alter table public.meal_groups add constraint meal_groups_created_by_fkey
+  foreign key (created_by) references auth.users(id) on delete set null;
 
 create table if not exists public.group_members (
   group_id  bigint not null references public.meal_groups(id) on delete cascade,
@@ -369,7 +415,7 @@ begin
   if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
   if coalesce(trim(p_name), '') = '' then return json_build_object('ok', false, 'error', 'empty_name'); end if;
 
-  insert into public.meal_groups (name, created_by) values (trim(p_name), v_uid) returning id into v_id;
+  insert into public.meal_groups (name, created_by) values (left(trim(p_name), 60), v_uid) returning id into v_id;
   insert into public.group_members (group_id, user_id) values (v_id, v_uid);
 
   return json_build_object('ok', true, 'group_id', v_id);
@@ -378,6 +424,8 @@ $$;
 
 -- ── add_group_member_by_email：輸入 email 直接加入名單──────────
 -- 只有群組成員能加人；輸入的 email 要是已註冊帳號才加得進去（不寄信、不產生邀請連結）。
+-- 刻意不回傳「查無此帳號」跟「已加入」的差異：舊版本會分開回報，等於任何
+-- 群組成員都能拿來測試任意 email 是不是已註冊帳號（enumeration，issue #017）。
 create or replace function public.add_group_member_by_email(p_group_id bigint, p_email text)
 returns json
 language plpgsql
@@ -396,12 +444,12 @@ begin
   if not v_is_member then return json_build_object('ok', false, 'error', 'not_a_member'); end if;
 
   select id into v_target from auth.users where lower(email) = lower(trim(p_email));
-  if v_target is null then return json_build_object('ok', false, 'error', 'user_not_found'); end if;
+  if v_target is not null then
+    insert into public.group_members (group_id, user_id) values (p_group_id, v_target)
+    on conflict (group_id, user_id) do nothing;
+  end if;
 
-  insert into public.group_members (group_id, user_id) values (p_group_id, v_target)
-  on conflict (group_id, user_id) do nothing;
-
-  return json_build_object('ok', true, 'user_id', v_target);
+  return json_build_object('ok', true);
 end;
 $$;
 
@@ -460,16 +508,24 @@ revoke all on function public.join_group(bigint) from public, anon;
 grant execute on function public.join_group(bigint) to authenticated;
 
 -- ── group_spin_results：每天的轉盤結果，廣播給全組看 ───────────
+-- spinner_id 用 on delete set null（不是 cascade）：轉盤人事後刪帳號，
+-- 不該連帶讓全組的「今天吃什麼」歷史紀錄消失——winner_name 本來就是
+-- 快照字串，就算 spinner_id 變 null 這筆紀錄仍然可讀（issue #019）。
 create table if not exists public.group_spin_results (
   id          bigint generated always as identity primary key,
   group_id    bigint not null references public.meal_groups(id) on delete cascade,
   spin_day    date not null default (now() at time zone 'Asia/Taipei')::date,
-  spinner_id  uuid not null references auth.users(id) on delete cascade,
+  spinner_id  uuid references auth.users(id) on delete set null,
   winner_name text not null,
   wheel_mode  text not null default 'default',
   created_at  timestamptz not null default now(),
   unique (group_id, spin_day)
 );
+
+alter table public.group_spin_results alter column spinner_id drop not null;
+alter table public.group_spin_results drop constraint if exists group_spin_results_spinner_id_fkey;
+alter table public.group_spin_results add constraint group_spin_results_spinner_id_fkey
+  foreign key (spinner_id) references auth.users(id) on delete set null;
 
 alter table public.group_spin_results enable row level security;
 drop policy if exists "members can read group results" on public.group_spin_results;
@@ -523,8 +579,12 @@ as $$
        cnt
      )
 $$;
-revoke all on function public.group_daily_spinner(bigint) from public, anon;
-grant execute on function public.group_daily_spinner(bigint) to authenticated;
+-- 刻意不 grant 給 authenticated：這個函式本身不檢查呼叫者是不是該群組
+-- 成員，直接開放的話任何人可以對任意 group_id 查出「今天輪到誰」的
+-- uuid，再對照全平台可讀的 profiles 解出對方暱稱/頭像（issue #018）。
+-- group_status()／record_group_result() 是 SECURITY DEFINER，內部呼叫
+-- 這個函式時是以函式擁有者的身份執行，不受此處 revoke 影響，仍然能用。
+revoke all on function public.group_daily_spinner(bigint) from public, anon, authenticated;
 
 -- ── group_status：群組頁一次拿到成員名單／今日轉盤人／今日結果／圈主是誰 ──
 create or replace function public.group_status(p_group_id bigint)
@@ -594,17 +654,30 @@ as $$
 declare
   v_uid   uuid := auth.uid();
   v_owner uuid;
+  v_n     int;
 begin
   if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
 
+  -- 跟 leave_group 共用同一把鎖，避免圈主轉移跟移除成員併發時互相踩到
+  -- （issue #006）。
+  perform pg_advisory_xact_lock(hashtextextended(p_group_id::text, 1));
+
   select created_by into v_owner from public.meal_groups where id = p_group_id;
   if v_owner is null then return json_build_object('ok', false, 'error', 'group_not_found'); end if;
-  if v_owner <> v_uid then return json_build_object('ok', false, 'error', 'not_owner'); end if;
+  -- 除了「是不是登記中的圈主」，也要確認呼叫者現在仍是這個群組的成員：
+  -- 前一版沒做這層檢查，圈主轉移的 race condition 下，剛離開的舊圈主
+  -- 仍能呼叫這支函式移除現有成員（issue #006）。
+  if v_owner <> v_uid or not exists(
+    select 1 from public.group_members where group_id = p_group_id and user_id = v_uid
+  ) then
+    return json_build_object('ok', false, 'error', 'not_owner');
+  end if;
   if p_user_id = v_owner then return json_build_object('ok', false, 'error', 'cannot_remove_owner'); end if;
 
   delete from public.group_members where group_id = p_group_id and user_id = p_user_id;
+  get diagnostics v_n = row_count;
 
-  return json_build_object('ok', true);
+  return json_build_object('ok', v_n > 0);
 end;
 $$;
 revoke all on function public.remove_group_member(bigint, uuid) from public, anon;
@@ -627,6 +700,12 @@ declare
   v_next      uuid;
 begin
   if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
+
+  -- 序列化同一群組的併發退出：沒有這把鎖時，圈主與另一位成員同時呼叫
+  -- leave_group，圈主轉移可能選到「同時正在離開」的那個人，讓
+  -- meal_groups.created_by 指向一個已經不在 group_members 裡的人
+  -- （issue #006）。
+  perform pg_advisory_xact_lock(hashtextextended(p_group_id::text, 1));
 
   select exists(select 1 from public.group_members where group_id = p_group_id and user_id = v_uid)
     into v_is_member;
@@ -675,7 +754,7 @@ begin
   end if;
 
   insert into public.group_spin_results (group_id, spinner_id, winner_name, wheel_mode)
-  values (p_group_id, v_uid, left(p_winner_name, 120), coalesce(nullif(trim(p_wheel_mode), ''), 'default'))
+  values (p_group_id, v_uid, left(p_winner_name, 120), left(coalesce(nullif(trim(p_wheel_mode), ''), 'default'), 40))
   on conflict (group_id, spin_day) do nothing;
 
   return json_build_object('ok', true);

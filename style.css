@@ -18,7 +18,7 @@
     --action: #2458D6;
     --action-hover: #1D46B0;
     --action-ink: #FFFFFF;
-    --amber: #E8A33D;
+    --amber: #8A5A12; /* 原本 #E8A33D 在白底上文字對比只有約 2.16:1，未達 WCAG AA 4.5:1，加深至此（issue #012） */
     --chip-bg: #EEF3FA;
     --shadow: 0 10px 30px rgba(37, 99, 235, .10);
     --shadow-lg: 0 18px 50px rgba(37, 99, 235, .16);
@@ -39,6 +39,11 @@
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+  /* 視覺上隱藏但螢幕閱讀器讀得到，給只需要播報、不需要顯示的文字用 */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
   body {
     background: var(--bg);
     color: var(--text);
@@ -80,13 +85,13 @@
 
   .wheel-tabs { display: flex; gap: 4px; background: var(--chip-bg); padding: 4px; border-radius: var(--radius-pill); width: 100%; max-width: 360px; }
   .wheel-tab {
-    flex: 1; border: none; background: transparent; padding: 9px 10px; border-radius: var(--radius-pill);
+    flex: 1; border: none; background: transparent; padding: 13px 10px; border-radius: var(--radius-pill);
     font: inherit; font-size: 13.5px; font-weight: 700; color: var(--text-2); cursor: pointer;
     display: flex; align-items: center; justify-content: center; gap: 5px; transition: all .12s;
   }
   .wheel-tab.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
   .wheel-tab-count {
-    font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft);
+    font-size: var(--fs-xs); font-weight: 700; color: var(--accent); background: var(--accent-soft);
     border-radius: var(--radius-pill); padding: 1px 7px; font-variant-numeric: tabular-nums;
   }
 
@@ -109,7 +114,7 @@
   }
   .group-banner-leave {
     background: none; border: none; color: var(--text-2); font: inherit; font-size: var(--fs-xs);
-    cursor: pointer; text-decoration: underline; padding: 2px 4px; flex: none;
+    cursor: pointer; text-decoration: underline; padding: 12px 10px; margin: -10px -6px; flex: none;
   }
   .group-banner-turn { font-size: var(--fs-sm); color: var(--text-2); }
   .group-banner-turn.mine { color: var(--accent); font-weight: 700; }
@@ -121,6 +126,9 @@
   .group-banner-result:hover, .group-banner-result:focus-visible { filter: brightness(0.97); }
   .result-hint { margin-left: auto; color: var(--text-2); font-size: var(--fs-xs); }
 
+  /* 「當前篩選 X 家」跟「今天還可轉 N 次」語意上是同一組資訊，用一個
+     容器包起來讓間距比 panel 其他區塊窄，視覺上讀成一組（issue #044）。 */
+  .wheel-meta { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
   .match-count {
     font-size: var(--fs-base); color: var(--text-2); letter-spacing: 1px;
     display: flex; align-items: center; gap: 8px;
@@ -149,7 +157,7 @@
   .hub:active:not(:disabled) { transform: translate(-50%, -50%) scale(.96); }
   .hub:disabled { cursor: not-allowed; filter: saturate(.4) brightness(.85); }
   .hub:focus-visible, button:focus-visible, a.btn:focus-visible {
-    outline: 3px solid var(--amber); outline-offset: 2px;
+    outline: 3px solid var(--accent); outline-offset: 2px;
   }
   .empty-note {
     position: absolute; inset: 0; display: none; z-index: 4;
@@ -194,7 +202,8 @@
     background: var(--accent); border: 3px solid var(--surface);
     box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: pointer;
   }
-  .scale-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-2); margin-top: 3px; }
+  input[type="range"]:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+  .scale-ends { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-2); margin-top: 3px; }
 
   .cats-head { display: flex; justify-content: space-between; align-items: center; }
   .cats-head > span:first-child { font-size: var(--fs-base); font-weight: 700; }
@@ -207,14 +216,14 @@
     border: 1.5px solid var(--accent); background: var(--accent-soft); color: var(--accent);
   }
   .cats-head-actions .cats-all-btn:hover { filter: brightness(1.04); }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
   .chip {
     border: 1.5px solid var(--line); background: var(--surface-2); color: var(--text-2);
-    border-radius: var(--radius-pill); padding: 5px 12px; font: inherit; font-size: var(--fs-md); cursor: pointer;
+    border-radius: var(--radius-pill); padding: 10px 14px; font: inherit; font-size: var(--fs-md); cursor: pointer;
     transition: all .12s;
   }
   .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
-  .chip .n { opacity: .75; font-size: 11.5px; margin-left: 3px; font-variant-numeric: tabular-nums; }
+  .chip .n { opacity: .75; font-size: var(--fs-xs); margin-left: 3px; font-variant-numeric: tabular-nums; }
 
   /* ── list ── */
   details.roster { margin-top: 26px; }
@@ -229,13 +238,14 @@
     position: relative;
   }
   .r-row.skipped { opacity: .45; }
-  .r-row .r-name { font-weight: 700; font-size: 14.5px; display: flex; justify-content: space-between; gap: 8px; padding-right: 22px; }
+  .r-row .r-name { font-weight: 700; font-size: 14.5px; display: flex; justify-content: space-between; gap: 8px; padding-right: 46px; }
   .r-row .r-meta { color: var(--text-2); display: flex; gap: 10px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
   .r-row .r-note { color: var(--text-2); font-size: var(--fs-sm); }
+  /* 44x44 是 WCAG 2.5.5 建議的最小觸控目標，原本只有 24x24px 在手機上很難點中（issue #007） */
   .r-edit-btn {
-    position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
+    position: absolute; top: 4px; right: 4px; width: 44px; height: 44px; border-radius: 50%;
     border: none; background: var(--surface-2); color: var(--text-2); cursor: pointer;
-    display: flex; align-items: center; justify-content: center; font-size: var(--fs-xs); padding: 0;
+    display: flex; align-items: center; justify-content: center; font-size: var(--fs-base); padding: 0;
     transition: background .12s, color .12s;
   }
   .r-edit-btn:hover { background: var(--accent-soft); color: var(--accent); }
@@ -244,7 +254,7 @@
   .veil {
     position: fixed; inset: 0; z-index: 50; display: none;
     align-items: center; justify-content: center; padding: 20px;
-    background: rgba(20, 16, 12, .55); backdrop-filter: blur(3px);
+    background: rgba(20, 16, 12, .6); backdrop-filter: blur(4px);
   }
   .veil.show { display: flex; }
   .ticket {
@@ -280,7 +290,7 @@
   .btn-again { background: var(--chip-bg); color: var(--text); }
   .ticket .close {
     position: absolute; top: 10px; right: 14px; background: none; border: none;
-    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 11px;
   }
 
   /* ── confetti ── */
@@ -291,10 +301,13 @@
   @keyframes fall {
     to { transform: translateY(105vh) rotate(720deg); opacity: .6; }
   }
+  /* 所有用 pop 進場動畫的彈窗都要涵蓋，之前只列了 .ticket／.gate-card
+     兩個，bonus/spot/profile/groups 四個彈窗被漏掉了（issue #027）。 */
   @media (prefers-reduced-motion: reduce) {
     .brand.spinning .zhuan { animation: none; }
-    .ticket { animation: none; }
+    .ticket, .gate-card, .bonus-card, .spot-card, .profile-card, .groups-card { animation: none; }
     .confetti { display: none; }
+    .group-list-empty.loading { animation: none; }
   }
 
   /* ── auth bar ── */
@@ -361,7 +374,7 @@
     width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: var(--radius-md);
     font: inherit; font-size: var(--fs-lg); background: var(--surface-2); color: var(--text);
   }
-  .gate-card input[type="email"]:focus-visible, .gate-card input[type="password"]:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .gate-card input[type="email"]:focus-visible, .gate-card input[type="password"]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .gate-card .g-msg { font-size: var(--fs-md); min-height: 18px; }
   .gate-card .g-msg.err { color: var(--action); }
   .gate-card .g-msg.ok { color: var(--accent); font-weight: 700; }
@@ -394,13 +407,12 @@
   .bonus-media a { display: flex; min-height: 0; max-width: 100%; max-height: 100%; }
   .bonus-media img { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; object-fit: contain; }
   .bonus-media .bonus-tag {
-    position: absolute; top: 12px; left: 12px; font-size: 11px; font-weight: 700; color: #fff;
+    position: absolute; top: 12px; left: 12px; font-size: var(--fs-xs); font-weight: 700; color: #fff;
     background: rgba(0,0,0,.45); border-radius: var(--radius-pill); padding: 2px 9px;
   }
   .bonus-copy { font-size: var(--fs-base); color: #fff; padding: 14px 20px 0; flex: none; }
   .bonus-timer { font-size: var(--fs-md); color: rgba(255,255,255,.7); font-variant-numeric: tabular-nums; padding: 4px 20px max(14px, env(safe-area-inset-bottom)); flex: none; }
   .bonus-card .btn[disabled] { opacity: .45; cursor: progress; }
-  @media (prefers-reduced-motion: reduce) { .gate-card { animation: none; } }
 
   /* ── 共享轉盤：新增地點 ── */
   .spot-veil {
@@ -419,7 +431,7 @@
   .spot-card h2 { margin: 0; font-size: 19px; font-weight: 900; padding-right: 22px; }
   .spot-card .close {
     position: absolute; top: 10px; right: 12px; background: none; border: none;
-    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 11px;
   }
   .spot-hint { margin: 0; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.6; }
   .spot-quick { display: flex; gap: 8px; }
@@ -435,7 +447,7 @@
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
     font: inherit; font-size: var(--fs-base); background: var(--surface-2); color: var(--text); box-sizing: border-box;
   }
-  .spot-card input:focus-visible, .spot-card select:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .spot-card input:focus-visible, .spot-card select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .spot-msg { font-size: var(--fs-md); min-height: 18px; }
   .spot-msg.err { color: var(--action); }
   .spot-msg.ok { color: var(--accent); font-weight: 700; }
@@ -458,10 +470,13 @@
   .profile-card h2 { margin: 0; font-size: 19px; font-weight: 900; padding-right: 22px; }
   .profile-card .close {
     position: absolute; top: 10px; right: 12px; background: none; border: none;
-    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 11px;
   }
   .profile-email { font-size: var(--fs-sm); color: var(--text-2); margin-top: -6px; }
   .profile-avatar-row { display: flex; align-items: center; gap: 14px; }
+  /* input[type=file] 原生元素有 intrinsic 寬度，窄 modal 下沒有 min-width:0
+     會把整排撐寬、擠出彈窗（issue #008）。 */
+  .profile-avatar-row > .profile-field { min-width: 0; }
   .profile-avatar-preview {
     width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
     background: var(--surface-2); border: 1.5px solid var(--line); flex: none;
@@ -471,7 +486,7 @@
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
     font: inherit; font-size: var(--fs-base); background: var(--surface-2); color: var(--text); box-sizing: border-box;
   }
-  .profile-card input:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .profile-card input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .profile-msg { font-size: var(--fs-md); min-height: 18px; }
   .profile-msg.err { color: var(--action); }
   .profile-msg.ok { color: var(--accent); font-weight: 700; }
@@ -504,13 +519,13 @@
   .groups-card h2 { margin: 0; font-size: 19px; font-weight: 900; padding-right: 22px; }
   .groups-card .close {
     position: absolute; top: 10px; right: 12px; background: none; border: none;
-    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 6px;
+    font-size: 22px; color: var(--text-2); cursor: pointer; line-height: 1; padding: 11px;
   }
   .groups-card input[type="text"], .groups-card input[type="email"] {
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
     font: inherit; font-size: var(--fs-base); background: var(--surface-2); color: var(--text); box-sizing: border-box;
   }
-  .groups-card input:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .groups-card input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .groups-card .btn[disabled] { opacity: .55; cursor: progress; }
   .groups-msg { font-size: var(--fs-md); min-height: 18px; }
   .groups-msg.err { color: var(--action); }
@@ -523,6 +538,10 @@
   .group-list-subhead { margin: 4px 0 -4px; font-size: var(--fs-sm); font-weight: 800; color: var(--text-2); }
   .group-list { display: flex; flex-direction: column; gap: 8px; }
   .group-list-empty { font-size: var(--fs-sm); color: var(--text-2); }
+  /* 讀取中跟「真的是空的」用同一個元素顯示文字，加個呼吸動畫至少讓
+     讀取中看起來還「活著」，不會被誤以為已經讀完、結果就是空的（issue #029）。 */
+  @keyframes skeleton-pulse { 0%, 100% { opacity: .45; } 50% { opacity: .9; } }
+  .group-list-empty.loading { animation: skeleton-pulse 1.2s ease-in-out infinite; }
   .group-list-item {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface-2);
@@ -562,7 +581,7 @@
   }
   .group-member-badge {
     align-self: flex-start;
-    font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft);
+    font-size: var(--fs-xs); font-weight: 700; color: var(--accent); background: var(--accent-soft);
     border-radius: var(--radius-pill); padding: 2px 9px; white-space: nowrap;
   }
   .group-member-remove {

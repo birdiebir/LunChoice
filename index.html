@@ -48,11 +48,13 @@
           <span class="group-banner-title">🍚 飯搭子圈：<span id="groupBannerName"></span></span>
           <button class="group-banner-leave" id="groupBannerLeave" type="button">離開群組模式</button>
         </div>
-        <div class="group-banner-turn" id="groupBannerTurn"></div>
-        <button type="button" class="group-banner-result" id="groupBannerResult" hidden></button>
+        <div class="group-banner-turn" id="groupBannerTurn" aria-live="polite"></div>
+        <button type="button" class="group-banner-result" id="groupBannerResult" hidden aria-live="polite"></button>
       </div>
-      <div class="match-count">當前篩選 <b id="count">0</b> 家</div>
-      <span class="quota-badge" id="quotaBadge" hidden></span>
+      <div class="wheel-meta">
+        <div class="match-count">當前篩選 <b id="count">0</b> 家</div>
+        <span class="quota-badge" id="quotaBadge" hidden></span>
+      </div>
       <div class="wheel-stage" id="stage">
         <div class="pointer" aria-hidden="true"></div>
         <canvas id="wheel" width="1000" height="1000" aria-label="午餐轉輪"></canvas>
@@ -66,7 +68,7 @@
           </div>
         </div>
       </div>
-      <div class="hint" id="hint"></div>
+      <div class="hint" id="hint" role="status" aria-live="polite"></div>
     </section>
 
     <aside class="card slip" aria-label="今日條件">
@@ -83,7 +85,7 @@
           <button class="wheel-tab on" id="originDefaultBtn" type="button" role="tab" aria-selected="true">基隆路一段 200 號</button>
           <button class="wheel-tab" id="originGpsBtn" type="button" role="tab" aria-selected="false">目前位置</button>
         </div>
-        <div class="origin-msg" id="originMsg">預設轉盤／共享轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）</div>
+        <div class="origin-msg" id="originMsg" role="status" aria-live="polite">預設轉盤／共享轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）</div>
       </div>
 
       <div class="field">
@@ -114,11 +116,11 @@
 </div>
 
 <div class="veil" id="veil" aria-hidden="true">
-  <div class="ticket" role="dialog" aria-modal="true" aria-labelledby="rTitle">
+  <div class="ticket" id="resultDialog" role="dialog" aria-modal="true" aria-labelledby="rTitle" tabindex="-1">
     <button class="close" id="closeModal" aria-label="關閉">×</button>
     <div class="ticket-inner">
       <div class="eyebrow">今日午餐就決定是</div>
-      <h3 class="r-title" id="rTitle"></h3>
+      <h2 class="r-title" id="rTitle"></h2>
       <div class="badges" id="rBadges"></div>
       <div class="addr" id="rAddr"></div>
       <div class="note" id="rNote"></div>
@@ -131,11 +133,11 @@
 </div>
 
 <div class="veil" id="groupResultVeil" aria-hidden="true">
-  <div class="ticket" role="dialog" aria-modal="true" aria-labelledby="groupResultTitle">
+  <div class="ticket" id="groupResultDialog" role="dialog" aria-modal="true" aria-labelledby="groupResultTitle" tabindex="-1">
     <button class="close" id="groupResultCloseBtn" aria-label="關閉">×</button>
     <div class="ticket-inner">
       <div class="eyebrow">今天大家跟著吃</div>
-      <h3 class="r-title" id="groupResultTitle"></h3>
+      <h2 class="r-title" id="groupResultTitle"></h2>
       <div class="badges" id="groupResultBadges"></div>
       <div class="addr" id="groupResultAddr"></div>
       <div class="group-result-meta" id="groupResultMeta"></div>
@@ -151,7 +153,9 @@
     <div class="g-emoji" aria-hidden="true">🍱</div>
     <h2 id="gateTitle">先登入，再開轉</h2>
     <p>每人每天有 <strong>3 次</strong>轉盤機會。<br>輸入帳號與密碼，沒有帳號會自動幫你建立。</p>
+    <label class="sr-only" for="gateEmail">Email</label>
     <input type="email" id="gateEmail" placeholder="you@example.com" autocomplete="email" inputmode="email">
+    <label class="sr-only" for="gatePassword">密碼</label>
     <input type="password" id="gatePassword" placeholder="密碼（至少 6 碼）" autocomplete="current-password">
     <button class="btn btn-go" id="gateSubmit">登入 / 註冊</button>
     <div class="g-msg" id="gateMsg" role="status" aria-live="polite"></div>
@@ -159,7 +163,7 @@
 </div>
 
 <div class="bonus-veil" id="bonusVeil" aria-hidden="true">
-  <div class="bonus-card" role="dialog" aria-modal="true" aria-labelledby="bonusTitle">
+  <div class="bonus-card" id="bonusDialog" role="dialog" aria-modal="true" aria-labelledby="bonusTitle" tabindex="-1">
     <button class="close" id="bonusCloseBtn" aria-label="關閉">×</button>
     <div class="bonus-media">
       <span class="bonus-tag">廣告</span>
@@ -252,8 +256,9 @@
     <div id="groupListView">
       <h2 id="groupsTitle">飯搭子圈</h2>
       <div class="group-create-row">
+        <label class="sr-only" for="groupNameInput">新群組名稱</label>
         <input type="text" id="groupNameInput" maxlength="60" placeholder="新群組名稱…">
-        <button class="btn btn-again" id="groupCreateBtn" type="button">＋ 建立</button>
+        <button class="btn btn-go" id="groupCreateBtn" type="button">＋ 建立</button>
       </div>
       <div class="groups-msg" id="groupListMsg" role="status" aria-live="polite"></div>
 
@@ -264,7 +269,7 @@
 
       <h3 class="group-list-subhead">探索飯搭子圈</h3>
       <div class="group-list" id="allGroupList">
-        <div class="group-list-empty">載入中…</div>
+        <div class="group-list-empty loading">載入中…</div>
       </div>
     </div>
 
@@ -275,6 +280,7 @@
       <button type="button" class="group-today-result" id="groupDetailResult" hidden></button>
 
       <div class="group-add-member">
+        <label class="sr-only" for="groupAddEmail">輸入 email 加入名單</label>
         <input type="email" id="groupAddEmail" placeholder="輸入 email 加入名單…">
         <button class="btn btn-again" id="groupAddBtn" type="button">加入名單</button>
       </div>
@@ -287,6 +293,8 @@
     </div>
   </div>
 </div>
+
+<div id="srAnnounce" class="sr-only" role="status" aria-live="polite"></div>
 
 <script type="module" src="script.js"></script>
 </body>

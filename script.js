@@ -27,7 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
    ══════════════════════════════════════════════════════════ */
 const SUPABASE_URL = "https://tjnyeqmxofmheumsntkz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqbnllcW14b2ZtaGV1bXNudGt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5OTM3MzMsImV4cCI6MjA5OTU2OTczM30.VLWZMj3j9cBcou7dxGwl3j8SEWfelvIFGJhM6ltFxOI";
-const DAILY_LIMIT = 3;               // 每人每天可轉次數（也要和 SQL 內的預設一致）
+const DAILY_LIMIT = 3;               // 畫面初始顯示用；真正上限一律由後端 record_spin()/spin_status() 內部常數決定，前端這個值改了也沒用（issue #001）
 
 /* 網址加 ?adtest=1 開啟廣告測試模式：轉盤上的廣告按鈕永遠顯示、可以無限次點開廣告視窗，
    不受「次數用完」與「今天已經領過」限制，方便反覆檢查廣告素材／版面。
@@ -527,6 +527,10 @@ const S = 1000, CX = S / 2, R = S / 2 - 14;
    到（看不到但點得到／選得到），是無障礙上的一個洞。開窗時把 .app 設成
    inert，關窗時算「還有沒有其他窗開著」，都關了才解除。 */
 let openModalCount = 0;
+/* 開窗當下記錄是誰觸發的（document.activeElement），關窗時還原焦點過去
+   ——不然螢幕閱讀器/鍵盤使用者關窗後會掉回頁面最上方，得重新 Tab 一輪
+   才能回到原本在操作的地方（issue #032）。用陣列當堆疊處理巢狀情境。 */
+let modalFocusStack = [];
 function lockBackground() {
   openModalCount++;
   const app = document.querySelector(".app");
@@ -544,13 +548,20 @@ function unlockBackground() {
    openGate()）或關閉已關的窗都不會讓計數跑掉。 */
 function openVeil(id) {
   const el = $(id);
-  if (!el.classList.contains("show")) lockBackground();
+  if (!el.classList.contains("show")) {
+    lockBackground();
+    modalFocusStack.push(document.activeElement);
+  }
   el.classList.add("show");
   el.setAttribute("aria-hidden", "false");
 }
 function closeVeil(id) {
   const el = $(id);
-  if (el.classList.contains("show")) unlockBackground();
+  if (el.classList.contains("show")) {
+    unlockBackground();
+    const prevFocus = modalFocusStack.pop();
+    if (prevFocus && document.contains(prevFocus) && typeof prevFocus.focus === "function") prevFocus.focus();
+  }
   el.classList.remove("show");
   el.setAttribute("aria-hidden", "true");
 }
@@ -608,11 +619,14 @@ function refresh() {
   $("count").textContent = currentList.length;
   $("stage").classList.toggle("empty", currentList.length === 0);
   $("emptyNote").innerHTML = (state.wheelMode === "shared" && sharedSpots.length === 0)
-    ? "共享清單還是空的 🌱<br>來新增第一家吧"
+    ? (sharedSpotsLoadFailed ? "共享清單載入失敗 😥<br>請重新整理再試一次" : "共享清單還是空的 🌱<br>來新增第一家吧")
     : "沒有符合條件的店 😥<br>放寬一點預算或走路時間吧";
   $("spinBtn").disabled =
     currentList.length === 0 || state.spinning || auth.busy || !auth.user || outOfSpins() ||
     (activeGroup && !isMyGroupTurn());
+  // canvas 本身沒有文字內容，aria-label 是螢幕閱讀器唯一能得到的資訊，
+  // 要跟著目前篩選結果動態更新，不能是一句固定不變的「午餐轉輪」（issue #033）。
+  $("wheel").setAttribute("aria-label", `午餐轉輪，目前 ${currentList.length} 家候選`);
   drawWheel(currentList);
   renderChips();
   renderRoster();
@@ -626,6 +640,7 @@ function renderChips() {
     const count = activeList().filter(r => r.cat === cat).length;
     const b = document.createElement("button");
     b.className = "chip" + (state.cats.has(cat) ? " on" : "");
+    b.setAttribute("aria-pressed", String(state.cats.has(cat)));
     b.innerHTML = `${CAT_EMOJI[cat] || "🍽️"} ${escapeHtml(cat)}<span class="n">${count}</span>`;
     b.onclick = () => {
       state.cats.has(cat) ? state.cats.delete(cat) : state.cats.add(cat);
@@ -637,6 +652,11 @@ function renderChips() {
 
 function renderRoster() {
   const box = $("roster");
+  // 整段重建前先記住焦點停在哪一筆的編輯鈕上，重建後盡量還原，不然編輯
+  // 到一半的地點被 Realtime 更新一推，焦點會無聲掉回 body（issue #045）。
+  const focusedName = (document.activeElement?.classList.contains("r-edit-btn"))
+    ? document.activeElement.closest(".r-row")?.dataset.name
+    : null;
   box.innerHTML = "";
   /* 走路時間滑桿最多只能設到 10 分鐘，用自己目前位置重新估算出來的
      走路時間如果直接超過這個上限，代表不管怎麼調滑桿都不會落在篩選
@@ -649,13 +669,18 @@ function renderRoster() {
     const inFilter = avg(r) <= state.budget && walkMinutesFor(r) <= state.walk && state.cats.has(r.cat);
     const div = document.createElement("div");
     div.className = "r-row" + (!inFilter ? " skipped" : "");
+    div.dataset.name = r.name;
     div.innerHTML = `
       ${state.wheelMode === "shared" ? '<button class="r-edit-btn" type="button" aria-label="編輯這筆資料">✎</button>' : ""}
       <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span></div>
       <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${walkMinutesFor(r)} 分</span><span>${escapeHtml(r.addr)}</span></div>
-      ${r.note ? `<div class="r-note">${escapeHtml(r.note)}</div>` : ""}`;
+      ${r.note ? `<div class="r-note">${escapeHtml(r.note)}</div>` : ""}
+      ${!inFilter ? '<span class="sr-only">（目前不在篩選範圍內）</span>' : ""}`;
     const editBtn = div.querySelector(".r-edit-btn");
-    if (editBtn) editBtn.onclick = () => openEditSpotModal(r);
+    if (editBtn) {
+      editBtn.onclick = () => openEditSpotModal(r);
+      if (r.name === focusedName) editBtn.focus();
+    }
     box.appendChild(div);
   }
 }
@@ -681,14 +706,27 @@ function updateSharedCountBadge() {
   badge.textContent = sharedSpots.length;
 }
 
+/* 讀取失敗時 sharedSpots 會維持空陣列，跟「真的還沒人新增過」在畫面上
+   長得一模一樣——多這個旗標讓 refresh() 的空狀態文案能夠分辨兩者，
+   不然使用者會誤以為清單真的是空的而跑去重複新增（issue #020）。 */
+let sharedSpotsLoadFailed = false;
 async function loadSharedSpots() {
   try {
     const { data, error } = await supabase
       .from("shared_spots").select("*").order("created_at", { ascending: true });
-    if (!error && data) sharedSpots = data.map(mapSharedRow);
-  } catch (e) {}
+    if (error) throw error;
+    sharedSpots = data.map(mapSharedRow);
+    sharedSpotsLoadFailed = false;
+  } catch (e) {
+    sharedSpotsLoadFailed = true;
+  }
   updateSharedCountBadge();
   if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
+}
+
+function announce(text) {
+  const el = $("srAnnounce");
+  if (el) el.textContent = text;
 }
 
 let sharedChannel = null;
@@ -699,6 +737,7 @@ function subscribeSharedSpots() {
       if (sharedSpots.some(s => s.id === payload.new.id)) return;
       sharedSpots.push(mapSharedRow(payload.new));
       updateSharedCountBadge();
+      announce(`共享清單新增了：${payload.new.name}`);
       if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "shared_spots" }, payload => {
@@ -706,17 +745,38 @@ function subscribeSharedSpots() {
       const i = sharedSpots.findIndex(s => s.id === payload.new.id);
       if (i === -1) return;
       sharedSpots[i] = mapSharedRow(payload.new);
+      announce(`共享清單更新了：${payload.new.name}`);
       if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
     })
     .subscribe();
+}
+
+/* ARIA Tabs Pattern：方向鍵在同一組頁籤之間切換並直接觸發選取，未選取的
+   頁籤 tabIndex 設 -1，Tab 鍵只會停在目前選取的那一個（issue #031）。 */
+function bindTabArrowKeys(tabs, onSelect) {
+  tabs.forEach((tab, i) => {
+    tab.addEventListener("keydown", e => {
+      let target = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") target = tabs[(i + 1) % tabs.length];
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") target = tabs[(i - 1 + tabs.length) % tabs.length];
+      else if (e.key === "Home") target = tabs[0];
+      else if (e.key === "End") target = tabs[tabs.length - 1];
+      if (!target) return;
+      e.preventDefault();
+      target.focus();
+      onSelect(target);
+    });
+  });
 }
 
 function syncWheelModeUI() {
   const mode = state.wheelMode;
   $("tabDefault").classList.toggle("on", mode === "default");
   $("tabDefault").setAttribute("aria-selected", String(mode === "default"));
+  $("tabDefault").tabIndex = mode === "default" ? 0 : -1;
   $("tabShared").classList.toggle("on", mode === "shared");
   $("tabShared").setAttribute("aria-selected", String(mode === "shared"));
+  $("tabShared").tabIndex = mode === "shared" ? 0 : -1;
   $("addSpotBtn").hidden = mode !== "shared";
 }
 function setWheelMode(mode) {
@@ -728,6 +788,7 @@ function setWheelMode(mode) {
 }
 $("tabDefault").onclick = () => setWheelMode("default");
 $("tabShared").onclick = () => setWheelMode("shared");
+bindTabArrowKeys([$("tabShared"), $("tabDefault")], tab => tab.click());
 
 /* ══════════ 轉動 ══════════ */
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -808,20 +869,31 @@ function animateSpin(spinId, list) {
 }
 
 /* 轉盤動畫結束、知道轉到誰之後才回填：個人紀錄 + （如果在群組模式）廣播給全組。
-   都是背景動作，失敗也不影響畫面上已經顯示的結果。 */
+   都是背景動作，不影響畫面上已經顯示的結果，但失敗時要讓使用者知道
+   （issue #002）——不然次數已經扣了，畫面卻悄悄跟後端狀態脫節。 */
 async function recordSpinOutcome(winner, spinId) {
   try {
-    if (spinId) await supabase.rpc("set_spin_result", {
-      p_spin_id: spinId, p_winner_name: winner.name, p_wheel_mode: state.wheelMode
-    });
-  } catch (e) {}
+    if (spinId) {
+      const { error } = await supabase.rpc("set_spin_result", {
+        p_spin_id: spinId, p_winner_name: winner.name, p_wheel_mode: state.wheelMode
+      });
+      if (error) throw error;
+    }
+  } catch (e) {
+    setHint("⚠️ 結果同步失敗，個人紀錄可能沒存到，請重新整理確認", true);
+  }
   if (activeGroup) {
     try {
-      await supabase.rpc("record_group_result", {
+      const { error } = await supabase.rpc("record_group_result", {
         p_group_id: activeGroup.group_id, p_winner_name: winner.name, p_wheel_mode: state.wheelMode
       });
-      await refreshActiveGroupStatus();
-    } catch (e) {}
+      if (error) throw error;
+    } catch (e) {
+      setHint("⚠️ 群組結果廣播失敗，其他成員可能看不到，請重新整理確認", true);
+    }
+    // 不管廣播成功與否都要重新讀一次群組狀態，讓畫面反映後端目前的
+    // 實際狀態，而不是繼續停在「輪到你」的舊資訊。
+    await refreshActiveGroupStatus();
   }
 }
 
@@ -840,6 +912,9 @@ function showResult(r) {
     : "https://www.google.com/maps/search/?api=1&query=" +
       encodeURIComponent("台北市 " + r.name + " " + r.addr);
   openVeil("veil");
+  // 轉盤結果是全站最核心的彈窗，焦點一定要主動移進去，不然螢幕閱讀器
+  // 使用者完全不會知道跳出了新內容（issue #009）。
+  $("resultDialog").focus();
   confetti();
 }
 function hideResult() { closeVeil("veil"); }
@@ -901,8 +976,10 @@ function syncOriginTabs() {
   const usingGps = !!customOrigin;
   $("originDefaultBtn").classList.toggle("on", !usingGps);
   $("originDefaultBtn").setAttribute("aria-selected", String(!usingGps));
+  $("originDefaultBtn").tabIndex = !usingGps ? 0 : -1;
   $("originGpsBtn").classList.toggle("on", usingGps);
   $("originGpsBtn").setAttribute("aria-selected", String(usingGps));
+  $("originGpsBtn").tabIndex = usingGps ? 0 : -1;
 }
 /* 反查地址用 OpenStreetMap 的 Nominatim（免金鑰的免費服務），失敗就回 null，
    前端只顯示座標換算的結果、不會整個功能掛掉。 */
@@ -957,12 +1034,13 @@ $("originGpsBtn").onclick = () => {
     { enableHighAccuracy: false, timeout: 10000 }
   );
 };
+bindTabArrowKeys([$("originDefaultBtn"), $("originGpsBtn")], tab => tab.click());
 $("spinBtn").onclick = spin;
 $("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { hideResult(); closeBonusModal(); closeSpotModal(); closeProfileModal(); closeGroupsModal(); closeUserMenu(); }
+  if (e.key === "Escape") { hideResult(); closeVeil("groupResultVeil"); closeBonusModal(); closeSpotModal(); closeProfileModal(); closeGroupsModal(); closeUserMenu(); }
   if (e.code === "Space"
       && openModalCount === 0
       && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement?.tagName || "")) {
@@ -995,10 +1073,11 @@ function updateQuota() {
   setHint(DEFAULT_HINT, false);
 }
 
-/* 向伺服器登記一次轉盤（原子操作，超過上限會被擋下） */
+/* 向伺服器登記一次轉盤（原子操作，超過上限會被擋下）。上限完全由後端
+   內部常數決定，不再傳 p_limit 給伺服器（issue #001）。 */
 async function recordSpin() {
   try {
-    const { data, error } = await supabase.rpc("record_spin", { p_limit: DAILY_LIMIT });
+    const { data, error } = await supabase.rpc("record_spin");
     if (error) return { ok: false, error: "rpc_error", message: error.message };
     return data;
   } catch (e) {
@@ -1008,15 +1087,20 @@ async function recordSpin() {
 
 /* 只讀取目前剩餘次數與廣告加轉額度，不消耗 */
 async function fetchStatus() {
+  let failed = false;
   try {
-    const { data, error } = await supabase.rpc("spin_status", { p_limit: DAILY_LIMIT });
-    if (!error && data) {
-      auth.remaining = data.remaining;
-      auth.limit = data.limit;
-      auth.bonusAvailable = !!data.bonus_available;
-    }
-  } catch (e) {}
+    const { data, error } = await supabase.rpc("spin_status");
+    if (error || !data) throw error || new Error("empty");
+    auth.remaining = data.remaining;
+    auth.limit = data.limit;
+    auth.bonusAvailable = !!data.bonus_available;
+  } catch (e) {
+    failed = true;
+  }
   updateQuota();
+  // updateQuota() 內部會把 hint 重設回預設文字，錯誤訊息要在它之後設，
+  // 才不會被立刻蓋掉（issue #020）。
+  if (failed) setHint("⚠️ 讀取次數資訊失敗，請重新整理再試", true);
   refresh();
 }
 
@@ -1042,6 +1126,7 @@ function openBonusModal() {
   $("bonusLink").href = creative.href;
   $("bonusTitle").textContent = creative.copy;
   openVeil("bonusVeil");
+  $("bonusDialog").focus();
   $("bonusCloseBtn").disabled = true;
   $("bonusTimer").textContent = "廣告播放中…";
   clearTimeout(bonusCloseTimer);
@@ -1059,10 +1144,18 @@ async function claimAndCloseBonusModal() {
   $("bonusCloseBtn").disabled = true;
   try {
     const { data, error } = await supabase.rpc("claim_bonus_spin");
-    closeBonusModal();
-    if (!error && data && data.ok) await fetchStatus();
+    if (!error && data && data.ok) {
+      closeBonusModal();
+      await fetchStatus();
+    } else {
+      // 領取失敗就不關窗，不然使用者會以為領到了但其實次數沒有增加
+      // （issue #015）。
+      $("bonusTimer").textContent = "加轉領取失敗，請再按一次 × 重試";
+      $("bonusCloseBtn").disabled = false;
+    }
   } catch (e) {
-    closeBonusModal();
+    $("bonusTimer").textContent = "連線發生問題，請再按一次 × 重試";
+    $("bonusCloseBtn").disabled = false;
   }
 }
 $("bonusWatchBtn").onclick = openBonusModal;
@@ -1074,6 +1167,10 @@ $("spotCat").innerHTML = CAT_ORDER.map(c => `<option value="${c}">${CAT_EMOJI[c]
 
 let spotParsedLatLng = null; // 自動帶入解析到的經緯度，跟著表單一起送出
 let editingSpotId = null;    // null＝新增模式；有值＝正在編輯這筆 shared_spots.id
+/* 每次開窗（resetSpotForm）遞增。送出當下記住這個值，非同步回呼比對
+   還是不是同一次開窗，避免慢回應在使用者已經切去填另一張新表單時，
+   還把它清空／強制關窗（issue #003）。 */
+let spotFormToken = 0;
 
 function openSpotModal() {
   if (!auth.user) { openGate(); return; }
@@ -1103,6 +1200,7 @@ function closeSpotModal() {
   closeVeil("spotVeil");
 }
 function resetSpotForm() {
+  spotFormToken++;
   editingSpotId = null;
   $("spotQuickUrl").value = "";
   $("spotQuickMsg").textContent = "";
@@ -1195,39 +1293,48 @@ function patchLocalSharedSpot(id, patch) {
 
 $("spotSubmitBtn").onclick = async () => {
   if (!auth.user) { openGate(); return; }
+  // 全部在任何 await 之前先讀出來、鎖定這次送出對應的表單狀態，
+  // 不要在非同步回呼裡才讀取可能已經被使用者切走的全域變數（issue #003）。
+  const myToken = spotFormToken;
+  const submittingId = editingSpotId;
   const name = $("spotName").value.trim();
   const cat = $("spotCat").value;
   const priceMin = Math.max(0, Math.round(+$("spotPriceMin").value || 0));
   const priceMax = Math.max(priceMin, Math.round(+$("spotPriceMax").value || priceMin));
   const walk = Math.max(0, Math.round(+$("spotWalk").value || 0));
   const mapsUrl = $("spotQuickUrl").value.trim();
+  const latLng = spotParsedLatLng;
 
   if (!name) { setSpotMsg("請填店名", "err"); return; }
 
   $("spotSubmitBtn").disabled = true;
-  setSpotMsg(editingSpotId ? "儲存中…" : "送出中…", "");
+  setSpotMsg(submittingId ? "儲存中…" : "送出中…", "");
   try {
     const payload = { name, cat, price_min: priceMin, price_max: priceMax, walk, maps_url: mapsUrl };
-    if (spotParsedLatLng) { payload.lat = spotParsedLatLng[0]; payload.lng = spotParsedLatLng[1]; }
+    if (latLng) { payload.lat = latLng[0]; payload.lng = latLng[1]; }
 
-    if (editingSpotId) {
-      const { error } = await supabase.from("shared_spots").update(payload).eq("id", editingSpotId);
-      if (error) { setSpotMsg("儲存失敗：" + error.message, "err"); return; }
-      patchLocalSharedSpot(editingSpotId, {
+    if (submittingId) {
+      const { error } = await supabase.from("shared_spots").update(payload).eq("id", submittingId);
+      if (error) { if (myToken === spotFormToken) setSpotMsg("儲存失敗：" + error.message, "err"); return; }
+      patchLocalSharedSpot(submittingId, {
         name, cat, price: [priceMin, priceMax], walk, mapsUrl,
-        ll: spotParsedLatLng || sharedSpots.find(s => s.id === editingSpotId)?.ll || null
+        ll: latLng || sharedSpots.find(s => s.id === submittingId)?.ll || null
       });
-      setSpotMsg("已儲存變更！", "ok");
+      if (myToken === spotFormToken) setSpotMsg("已儲存變更！", "ok");
     } else {
       payload.created_by = auth.user.id;
       const { error } = await supabase.from("shared_spots").insert(payload);
-      if (error) { setSpotMsg("新增失敗：" + error.message, "err"); return; }
-      setSpotMsg("新增成功！", "ok");
+      if (error) { if (myToken === spotFormToken) setSpotMsg("新增失敗：" + error.message, "err"); return; }
+      if (myToken === spotFormToken) setSpotMsg("新增成功！", "ok");
     }
-    resetSpotForm();
-    setTimeout(closeSpotModal, 700);
+    // 使用者送出後又重新開過窗（token 對不上），這裡就不要再去清空／
+    // 關掉他現在正在填的表單。
+    if (myToken === spotFormToken) {
+      resetSpotForm();
+      setTimeout(closeSpotModal, 700);
+    }
   } catch (e) {
-    setSpotMsg("連線發生問題，請稍後再試", "err");
+    if (myToken === spotFormToken) setSpotMsg("連線發生問題，請稍後再試", "err");
   } finally {
     $("spotSubmitBtn").disabled = false;
   }
@@ -1540,40 +1647,50 @@ function renderGroupMembers(data) {
       ${canRemove ? `<button class="group-member-remove" type="button" aria-label="把 ${escapeHtml(m.nickname)} 移出群組">×</button>` : ""}
     `;
     const removeBtn = row.querySelector(".group-member-remove");
-    if (removeBtn) removeBtn.onclick = () => armOrRemoveGroupMember(removeBtn, data.group_id, m.user_id);
+    if (removeBtn) removeBtn.onclick = () => armOrRemoveGroupMember(removeBtn, data.group_id, m.user_id, m.nickname);
     box.appendChild(row);
   }
 }
 
 /* 移除成員要點兩次：第一次把 × 換成「確定？」，2.5 秒內再點一次才真的送出，
-   避免手滑點到就把人踢出群組（沿用專案裡不用瀏覽器 confirm() 彈窗的風格）。 */
-function armOrRemoveGroupMember(btn, groupId, userId) {
+   避免手滑點到就把人踢出群組（沿用專案裡不用瀏覽器 confirm() 彈窗的風格）。
+   aria-label 要跟著文字一起換掉（issue #034），不然螢幕閱讀器使用者聽到的
+   還是「把 X 移出群組」的舊 label，聽不出這其實已經是二次確認狀態。 */
+function armOrRemoveGroupMember(btn, groupId, userId, nickname) {
   if (btn.dataset.armed === "1") {
-    removeGroupMember(groupId, userId);
+    removeGroupMember(groupId, userId, btn);
     return;
   }
   btn.dataset.armed = "1";
   btn.textContent = "確定？";
+  btn.setAttribute("aria-label", `確定要把 ${nickname} 移出群組嗎？`);
   btn.classList.add("confirm");
   setTimeout(() => {
     if (btn.isConnected) {
       btn.dataset.armed = "0";
       btn.textContent = "×";
+      btn.setAttribute("aria-label", `把 ${nickname} 移出群組`);
       btn.classList.remove("confirm");
     }
   }, 2500);
 }
 
-async function removeGroupMember(groupId, userId) {
+async function removeGroupMember(groupId, userId, btn) {
+  if (btn) btn.disabled = true;
   setGroupDetailMsg("移除中…", "");
   try {
     const { data, error } = await supabase.rpc("remove_group_member", { p_group_id: groupId, p_user_id: userId });
-    if (error || !data || !data.ok) { setGroupDetailMsg("移除失敗，請稍後再試", "err"); return; }
+    if (error || !data || !data.ok) {
+      setGroupDetailMsg("移除失敗，請稍後再試", "err");
+      if (btn) btn.disabled = false;
+      return;
+    }
     setGroupDetailMsg("已移除成員", "ok");
     await refreshGroupDetail(groupId);
     await loadMyGroups();
   } catch (e) {
     setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1584,7 +1701,8 @@ $("groupLeaveBtn").onclick = () => {
   const btn = $("groupLeaveBtn");
   if (!currentGroupDetail) return;
   if (btn.dataset.armed === "1") {
-    leaveGroup(currentGroupDetail.group_id);
+    btn.disabled = true;
+    leaveGroup(currentGroupDetail.group_id, btn);
     return;
   }
   btn.dataset.armed = "1";
@@ -1595,17 +1713,22 @@ $("groupLeaveBtn").onclick = () => {
   }, 2500);
 };
 
-async function leaveGroup(groupId) {
+async function leaveGroup(groupId, btn) {
   setGroupDetailMsg("退出中…", "");
   try {
     const { data, error } = await supabase.rpc("leave_group", { p_group_id: groupId });
-    if (error || !data || !data.ok) { setGroupDetailMsg("退出失敗，請稍後再試", "err"); return; }
+    if (error || !data || !data.ok) {
+      setGroupDetailMsg("退出失敗，請稍後再試", "err");
+      if (btn) btn.disabled = false;
+      return;
+    }
     if (activeGroup && activeGroup.group_id === groupId) leaveGroupMode();
     showGroupListView();
     await loadMyGroups();
     await loadAllGroups();
   } catch (e) {
     setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1640,13 +1763,13 @@ $("groupAddBtn").onclick = async () => {
       p_group_id: currentGroupDetail.group_id, p_email: email
     });
     if (error || !data || !data.ok) {
-      const reason = (data && data.error === "user_not_found")
-        ? "找不到這個 email 的帳號（對方要先註冊過才能加）" : "加入失敗，請稍後再試";
-      setGroupDetailMsg(reason, "err");
+      setGroupDetailMsg("加入失敗，請稍後再試", "err");
       return;
     }
     $("groupAddEmail").value = "";
-    setGroupDetailMsg("已加入名單！", "ok");
+    // 後端刻意不回傳「查無帳號」跟「已加入」的差異，避免被拿來測試任意
+    // email 是不是已註冊帳號（issue #017），訊息跟著改成中性用詞。
+    setGroupDetailMsg("邀請已送出（若對方已註冊，會直接加入名單）", "ok");
     await refreshGroupDetail(currentGroupDetail.group_id);
     await loadMyGroups();
   } catch (e) {
@@ -1738,7 +1861,13 @@ function openGroupResultDetail(detail) {
     : "https://www.google.com/maps/search/?api=1&query=" +
       encodeURIComponent("台北市 " + winner_name + (r?.addr ? " " + r.addr : ""));
 
+  // 這顆按鈕在群組詳細頁（groupsVeil）裡也點得到，先關掉它再開結果彈窗，
+  // 不然會有兩個 aria-modal="true" 的對話框同時開著（issue #010）。
+  // closeVeil 對「本來就沒開」的 id 是安全的 no-op，所以從主畫面上的
+  // 群組看板點過來（groupsVeil 根本沒開）也不會出錯。
+  closeVeil("groupsVeil");
   openVeil("groupResultVeil");
+  $("groupResultDialog").focus();
 }
 $("groupResultCloseBtn").onclick = () => closeVeil("groupResultVeil");
 $("groupResultVeil").onclick = e => { if (e.target === $("groupResultVeil")) closeVeil("groupResultVeil"); };
@@ -1747,7 +1876,16 @@ async function refreshActiveGroupStatus() {
   if (!activeGroup) return;
   try {
     const { data, error } = await supabase.rpc("group_status", { p_group_id: activeGroup.group_id });
-    if (!error && data && data.ok) activeGroupDetail = data;
+    if (!error && data && data.ok) {
+      activeGroupDetail = data;
+    } else if (!error && data && !data.ok) {
+      // 已經不在這個群組了（被圈主移除、或群組因為圈主退出而被刪除）：
+      // 回到個人模式，不要讓畫面繼續卡在舊的「今天輪到你」狀態，甚至
+      // 因此誤放行一次其實不該發生的轉盤（issue #004）。
+      activeGroup = null;
+      activeGroupDetail = null;
+      setHint("你已經不在這個群組了，已切回個人轉盤", true);
+    }
   } catch (e) {}
   syncGroupBanner();
   refresh();
@@ -1831,6 +1969,11 @@ async function applySession(session) {
     currentGroupDetail = null;
     activeGroupDetail = null;
     groupAutoActivateDone = false;
+    // 登出後沒人在看畫面了，訂閱還留著只是白白一直收 Realtime 事件、
+    // 觸發不必要的重繪（issue #023）；下次登入 subscribeSharedSpots()／
+    // subscribeGroupResults() 的「已有訂閱就 return」防呆會自然重建。
+    if (sharedChannel) { supabase.removeChannel(sharedChannel); sharedChannel = null; }
+    if (groupResultChannel) { supabase.removeChannel(groupResultChannel); groupResultChannel = null; }
     syncGroupBanner();
     updateQuota();
     refresh();
@@ -1893,14 +2036,18 @@ $("budgetOut").textContent = "NT$" + state.budget;
 $("walk").value = state.walk;
 $("walkOut").textContent = state.walk + " 分鐘";
 syncWheelModeUI();
+syncOriginTabs();
 recomputeCatsInData();
 syncGroupBanner();
 refresh();
 
 /* 啟動 Supabase 登入流程 */
 if (CONFIGURED) {
+  // onAuthStateChange 掛上監聽的當下就會補發一次目前的 session
+  // （INITIAL_SESSION 事件），不需要再額外呼叫 getSession() 拿一次——
+  // 兩條路徑都呼叫會讓 applySession() 觸發兩次，並發的 fetchStatus()／
+  // loadSharedSpots() 等請求可能讓較舊的回應覆蓋較新的畫面（issue #021）。
   supabase.auth.onAuthStateChange((_evt, session) => applySession(session));
-  supabase.auth.getSession().then(({ data }) => applySession(data.session));
 } else {
   openGate();
 }
