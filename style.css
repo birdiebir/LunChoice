@@ -114,9 +114,12 @@
   .group-banner-turn { font-size: var(--fs-sm); color: var(--text-2); }
   .group-banner-turn.mine { color: var(--accent); font-weight: 700; }
   .group-banner-result {
-    font-size: var(--fs-sm); background: var(--surface); border-radius: 10px; padding: 8px 10px;
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    font: inherit; font-size: var(--fs-sm); background: var(--surface); border: none; border-radius: 10px;
+    padding: 8px 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    width: 100%; text-align: left; color: var(--text); cursor: pointer;
   }
+  .group-banner-result:hover, .group-banner-result:focus-visible { filter: brightness(0.97); }
+  .result-hint { margin-left: auto; color: var(--text-2); font-size: var(--fs-xs); }
 
   .match-count {
     font-size: var(--fs-base); color: var(--text-2); letter-spacing: 1px;
@@ -264,6 +267,7 @@
   .badge.money { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
   .ticket .addr { font-size: 13.5px; color: var(--text-2); }
   .ticket .note { font-size: var(--fs-md); color: var(--amber); font-weight: 700; }
+  .group-result-meta { font-size: 13.5px; color: var(--text-2); }
   .ticket .actions { display: flex; flex-direction: column; gap: 9px; margin-top: 6px; }
   .btn {
     border: none; border-radius: var(--radius-md); padding: 12px 16px; font: inherit; font-size: var(--fs-lg);
@@ -516,6 +520,7 @@
   .group-create-row input { flex: 1; min-width: 0; }
   .group-create-row .btn { padding: 10px 14px; font-size: var(--fs-md); white-space: nowrap; }
 
+  .group-list-subhead { margin: 4px 0 -4px; font-size: var(--fs-sm); font-weight: 800; color: var(--text-2); }
   .group-list { display: flex; flex-direction: column; gap: 8px; }
   .group-list-empty { font-size: var(--fs-sm); color: var(--text-2); }
   .group-list-item {
@@ -525,11 +530,14 @@
     font: inherit; color: var(--text); width: 100%;
   }
   .group-list-item:hover { border-color: var(--accent); }
+  .group-list-item.discover { cursor: default; }
+  .group-list-item.discover:hover { border-color: var(--line); }
   .group-list-item .g-name {
     font-weight: 700; font-size: var(--fs-base); min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .group-list-item .g-meta { font-size: var(--fs-xs); color: var(--text-2); flex: none; }
+  .group-join-btn { padding: 7px 14px; font-size: var(--fs-sm); white-space: nowrap; flex: none; }
 
   .group-detail-back {
     background: none; border: none; color: var(--accent); font: inherit; font-size: var(--fs-md);
@@ -568,8 +576,11 @@
   .group-add-member input { flex: 1; min-width: 0; }
   .group-add-member .btn { padding: 10px 14px; font-size: var(--fs-md); white-space: nowrap; }
   .group-today-result {
-    font-size: var(--fs-md); background: var(--accent-soft); border-radius: var(--radius-md); padding: 10px 12px;
+    font: inherit; font-size: var(--fs-md); background: var(--accent-soft); border: none; border-radius: var(--radius-md);
+    padding: 10px 12px; width: 100%; text-align: left; color: var(--text); cursor: pointer;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
   }
+  .group-today-result:hover, .group-today-result:focus-visible { filter: brightness(0.97); }
   #groupUseWheelBtn { width: 100%; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); }
 
   /* ── 轉盤上的廣告加轉提示 ── */

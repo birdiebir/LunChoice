@@ -471,7 +471,7 @@ const state = {
   budget: Math.min(500, Math.max(100, store.budget ?? 500)),
   walk: store.walk ?? 10,
   cats: new Set(Array.isArray(store.cats) ? store.cats.filter(c => allCatsInData.includes(c)) : allCatsInData),
-  wheelMode: store.wheelMode === "shared" ? "shared" : "default",
+  wheelMode: store.wheelMode === "default" ? "default" : "shared",
   rot: -Math.PI / 2,
   spinning: false
 };
@@ -638,7 +638,13 @@ function renderChips() {
 function renderRoster() {
   const box = $("roster");
   box.innerHTML = "";
-  const sorted = [...activeList()].sort((a, b) => walkMinutesFor(a) - walkMinutesFor(b) || avg(a) - avg(b));
+  /* 走路時間滑桿最多只能設到 10 分鐘，用自己目前位置重新估算出來的
+     走路時間如果直接超過這個上限，代表不管怎麼調滑桿都不會落在篩選
+     範圍內，乾脆整列不顯示，而不是跟預算／類別沒過濾到一樣只是變灰。 */
+  const maxWalk = +$("walk").max;
+  const sorted = [...activeList()]
+    .filter(r => walkMinutesFor(r) <= maxWalk)
+    .sort((a, b) => walkMinutesFor(a) - walkMinutesFor(b) || avg(a) - avg(b));
   for (const r of sorted) {
     const inFilter = avg(r) <= state.budget && walkMinutesFor(r) <= state.walk && state.cats.has(r.cat);
     const div = document.createElement("div");
@@ -737,6 +743,11 @@ async function spin() {
 
   auth.busy = true;
   refresh();
+  /* 記住這次「登記轉盤」當下實際看到的清單：recordSpin() 這段 await 期間
+     （共享轉盤模式下）可能有人透過 Realtime 新增/刪除地點，觸發 refresh()
+     把全域 currentList 換掉，甚至變空。次數已經是照這份清單登記的，動畫跟
+     結果就該對應這份清單，不然會出現「次數扣了，畫面卻完全沒反應」。 */
+  const spinList = currentList;
   const res = await recordSpin();
   auth.busy = false;
 
@@ -753,12 +764,11 @@ async function spin() {
 
   auth.remaining = res.remaining;
   updateQuota();
-  animateSpin(res.spin_id);
+  animateSpin(res.spin_id, spinList);
 }
 
-function animateSpin(spinId) {
-  if (state.spinning || currentList.length === 0) return;
-  const list = currentList;
+function animateSpin(spinId, list) {
+  if (state.spinning || list.length === 0) return;
   const n = list.length;
   const winner = Math.floor(Math.random() * n);
   const seg = 2 * Math.PI / n;
@@ -1337,12 +1347,22 @@ $("profileSaveBtn").onclick = async () => {
 
 /* ══════════ 飯搭子圈 ══════════ */
 let myGroups = [];
-let currentGroupDetail = null;   // group_status() 的完整回傳，對應目前開著的詳細頁
+let allGroups = [];   // joinable_groups() 回傳：目前系統裡「我還沒加入」的群組，給探索列表用
+let currentGroupDetail = null;   // group_status() 的完整回傳，對應目前開著的詳細頁（純顯示用，可能是任何一個群組）
 let activeGroup = null;          // { group_id, name }：目前綁定在轉盤上的群組（null＝個人模式）
+/* activeGroupDetail：專門對應 activeGroup 的 group_status() 資料，只有在真的
+   refresh 到「目前綁定的那個群組」時才會更新——跟 currentGroupDetail 分開，
+   是因為使用者可能同時加入好幾個群組，點進去「看」另一個群組的詳細頁只是
+   瀏覽，不該把 currentGroupDetail 蓋過去後連帶讓「是否輪到我」判斷跟著跑掉。 */
+let activeGroupDetail = null;
+/* 這次登入（session）有沒有已經嘗試過自動切到群組轉盤——只在「從沒登入
+   變成登入」那一刻做一次，避免使用者手動按「離開群組模式」之後，Supabase
+   之後任何一次 auth 事件（例如 token 自動刷新）又把他撈回群組模式。 */
+let groupAutoActivateDone = false;
 
 function isMyGroupTurn() {
-  return !!(activeGroup && currentGroupDetail &&
-    currentGroupDetail.group_id === activeGroup.group_id && currentGroupDetail.is_daily_spinner);
+  return !!(activeGroup && activeGroupDetail &&
+    activeGroupDetail.group_id === activeGroup.group_id && activeGroupDetail.is_daily_spinner);
 }
 
 function openGroupsModal() {
@@ -1350,6 +1370,7 @@ function openGroupsModal() {
   openVeil("groupsVeil");
   showGroupListView();
   loadMyGroups();
+  loadAllGroups();
   $("groupNameInput").focus();
 }
 function closeGroupsModal() {
@@ -1396,6 +1417,57 @@ function renderGroupList() {
   }
 }
 
+/* 探索列表：只列「我還沒加入」的群組（joinable_groups() 已經幫忙濾掉），
+   每一列直接放一顆「加入」按鈕，不用像 renderGroupList 那樣整列可點——
+   整列可點會跟裡面的按鈕搶點擊事件，而且還沒加入前也還沒有詳細頁可看。 */
+async function loadAllGroups() {
+  try {
+    const { data, error } = await supabase.rpc("joinable_groups");
+    if (!error && Array.isArray(data)) allGroups = data;
+  } catch (e) {}
+  renderAllGroupsList();
+}
+
+function renderAllGroupsList() {
+  const box = $("allGroupList");
+  if (allGroups.length === 0) {
+    box.innerHTML = `<div class="group-list-empty">目前沒有其他可加入的飯搭子圈</div>`;
+    return;
+  }
+  box.innerHTML = "";
+  for (const g of allGroups) {
+    const row = document.createElement("div");
+    row.className = "group-list-item discover";
+    row.innerHTML = `
+      <span class="g-name">${escapeHtml(g.name)}</span>
+      <span class="g-meta">${g.member_count} 人</span>
+      <button class="btn btn-again group-join-btn" type="button">加入</button>
+    `;
+    const joinBtn = row.querySelector(".group-join-btn");
+    joinBtn.onclick = () => joinGroup(g.group_id, g.name, joinBtn);
+    box.appendChild(row);
+  }
+}
+
+/* 主動加入之後直接把這個群組設成使用中的群組轉盤（見 activateGroup），
+   不用使用者再手動點一次「用這個群組轉盤」——跟建立新群組是同一套邏輯。 */
+async function joinGroup(groupId, name, btn) {
+  btn.disabled = true;
+  setGroupListMsg("加入中…", "");
+  try {
+    const { data, error } = await supabase.rpc("join_group", { p_group_id: groupId });
+    if (error || !data || !data.ok) { setGroupListMsg("加入失敗，請稍後再試", "err"); btn.disabled = false; return; }
+    setGroupListMsg("已加入！", "ok");
+    await loadMyGroups();
+    await loadAllGroups();
+    await activateGroup(groupId, name);
+    openGroupDetail(groupId);
+  } catch (e) {
+    setGroupListMsg("連線發生問題，請稍後再試", "err");
+    btn.disabled = false;
+  }
+}
+
 $("groupNameInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("groupCreateBtn").click(); } });
 $("groupCreateBtn").onclick = async () => {
   const name = $("groupNameInput").value.trim();
@@ -1408,6 +1480,7 @@ $("groupCreateBtn").onclick = async () => {
     $("groupNameInput").value = "";
     setGroupListMsg("建立成功！", "ok");
     await loadMyGroups();
+    await activateGroup(data.group_id, name);
     openGroupDetail(data.group_id);
   } catch (e) {
     setGroupListMsg("連線發生問題，請稍後再試", "err");
@@ -1436,7 +1509,7 @@ async function refreshGroupDetail(groupId) {
     renderGroupMembers(data);
     renderGroupResult(data);
     updateGroupUseWheelBtn();
-    if (activeGroup && activeGroup.group_id === groupId) syncGroupBanner();
+    if (activeGroup && activeGroup.group_id === groupId) { activeGroupDetail = data; syncGroupBanner(); }
   } catch (e) {
     setGroupDetailMsg("連線發生問題，請稍後再試", "err");
   }
@@ -1498,10 +1571,11 @@ async function removeGroupMember(groupId, userId) {
 
 function renderGroupResult(data) {
   const box = $("groupDetailResult");
-  if (!data.today_result) { box.hidden = true; return; }
+  if (!data.today_result) { box.hidden = true; box.onclick = null; return; }
   box.hidden = false;
   const modeTag = data.today_result.wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
-  box.innerHTML = `🎉 今天大家跟著吃這個：<b>${escapeHtml(data.today_result.winner_name)}</b>（${modeTag}）`;
+  box.innerHTML = `🎉 今天大家跟著吃這個：<b>${escapeHtml(data.today_result.winner_name)}</b>（${modeTag}）<span class="result-hint">詳情 ›</span>`;
+  box.onclick = () => openGroupResultDetail(data);
 }
 
 function updateGroupUseWheelBtn() {
@@ -1546,6 +1620,7 @@ $("groupUseWheelBtn").onclick = () => {
   if (!currentGroupDetail) return;
   const g = myGroups.find(x => x.group_id === currentGroupDetail.group_id);
   activeGroup = { group_id: currentGroupDetail.group_id, name: g ? g.name : "飯搭子圈" };
+  activeGroupDetail = currentGroupDetail;
   updateGroupUseWheelBtn();
   closeGroupsModal();
   syncGroupBanner();
@@ -1554,6 +1629,7 @@ $("groupUseWheelBtn").onclick = () => {
 
 function leaveGroupMode() {
   activeGroup = null;
+  activeGroupDetail = null;
   syncGroupBanner();
   refresh();
 }
@@ -1564,7 +1640,7 @@ function syncGroupBanner() {
   if (!activeGroup) { banner.hidden = true; return; }
   banner.hidden = false;
   $("groupBannerName").textContent = activeGroup.name;
-  const d = (currentGroupDetail && currentGroupDetail.group_id === activeGroup.group_id) ? currentGroupDetail : null;
+  const d = (activeGroupDetail && activeGroupDetail.group_id === activeGroup.group_id) ? activeGroupDetail : null;
   const turnEl = $("groupBannerTurn");
   if (d) {
     const spinner = d.members.find(m => m.user_id === d.daily_spinner_id);
@@ -1578,20 +1654,86 @@ function syncGroupBanner() {
   if (d && d.today_result) {
     resultEl.hidden = false;
     const modeTag = d.today_result.wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
-    resultEl.innerHTML = `🎉 今天吃：<b>${escapeHtml(d.today_result.winner_name)}</b>（${modeTag}）`;
+    resultEl.innerHTML = `🎉 今天吃：<b>${escapeHtml(d.today_result.winner_name)}</b>（${modeTag}）<span class="result-hint">詳情 ›</span>`;
+    resultEl.onclick = () => openGroupResultDetail(d);
   } else {
     resultEl.hidden = true;
+    resultEl.onclick = null;
   }
 }
+
+/* 群組看板／群組詳細頁裡「今天吃 XXX」都是同一顆按鈕點開，秀出跟個人轉盤
+   結果一樣規格的詳細資訊（分類／價位／走路時間／地址／Google 地圖按鈕）。
+   today_result 只存店名字串，跟個人轉盤一樣以名字比對回目前的資料來源
+   （預設或共享清單）找出完整資料；找不到（例如共享地點後來被刪掉／改名）
+   就退回只用店名查 Google 地圖，仍然給得出地圖按鈕，只是沒有價位等細節。 */
+function openGroupResultDetail(detail) {
+  if (!detail || !detail.today_result) return;
+  const { winner_name, wheel_mode, spinner_id, created_at } = detail.today_result;
+  const list = wheel_mode === "shared" ? sharedSpots : RESTAURANTS;
+  const r = list.find(x => x.name === winner_name) || null;
+  const modeTag = wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
+
+  $("groupResultTitle").textContent = winner_name;
+  if (r) {
+    $("groupResultBadges").innerHTML = `
+      <span class="badge">${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.cat)}</span>
+      <span class="badge money">NT$${r.price[0]}–${r.price[1]}</span>
+      <span class="badge">🚶 ${walkMinutesFor(r)} 分鐘</span>`;
+    $("groupResultAddr").textContent = r.addr || "";
+  } else {
+    $("groupResultBadges").innerHTML = `<span class="badge">${modeTag}</span>`;
+    $("groupResultAddr").textContent = "";
+  }
+
+  const spinner = detail.members?.find(m => m.user_id === spinner_id);
+  const timeStr = created_at
+    ? new Date(created_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  $("groupResultMeta").textContent =
+    `由 ${spinner ? spinner.nickname : "某位成員"} 轉到${timeStr ? "・" + timeStr : ""}（${modeTag}）`;
+
+  $("groupResultMap").href = (r && r.ll)
+    ? `https://www.google.com/maps/search/${encodeURIComponent(r.name)}/@${r.ll[0]},${r.ll[1]},18z`
+    : "https://www.google.com/maps/search/?api=1&query=" +
+      encodeURIComponent("台北市 " + winner_name + (r?.addr ? " " + r.addr : ""));
+
+  openVeil("groupResultVeil");
+}
+$("groupResultCloseBtn").onclick = () => closeVeil("groupResultVeil");
+$("groupResultVeil").onclick = e => { if (e.target === $("groupResultVeil")) closeVeil("groupResultVeil"); };
 
 async function refreshActiveGroupStatus() {
   if (!activeGroup) return;
   try {
     const { data, error } = await supabase.rpc("group_status", { p_group_id: activeGroup.group_id });
-    if (!error && data && data.ok) currentGroupDetail = data;
+    if (!error && data && data.ok) activeGroupDetail = data;
   } catch (e) {}
   syncGroupBanner();
   refresh();
+}
+
+/* 建立新群組／主動加入群組後，直接把它設成使用中的群組轉盤，等同使用者
+   自己按了一次「用這個群組轉盤」——不用再多一步手動切換。 */
+async function activateGroup(groupId, name) {
+  activeGroup = { group_id: groupId, name };
+  await refreshActiveGroupStatus();
+}
+
+/* 有加入飯搭子圈的話，登入當下就自動綁定群組轉盤（不用每次都手動點「用這個
+   群組轉盤」）；只有使用者自己按「離開群組模式」才會回到個人模式——見
+   groupAutoActivateDone 的註解，同一次登入只會自動綁定這一次。多個群組時
+   挑 my_groups() 回傳的第一筆（依 created_by 時間排序，也就是最早加入的
+   那個），維持結果穩定可預期。 */
+async function autoActivateGroupOnLogin() {
+  try {
+    const { data, error } = await supabase.rpc("my_groups");
+    if (!error && Array.isArray(data)) myGroups = data;
+  } catch (e) {}
+  if (activeGroup || myGroups.length === 0) return;
+  const g = myGroups[0];
+  activeGroup = { group_id: g.group_id, name: g.name };
+  await refreshActiveGroupStatus();
 }
 
 let groupResultChannel = null;
@@ -1636,6 +1778,10 @@ async function applySession(session) {
     subscribeSharedSpots();
     loadMyProfile();
     subscribeGroupResults();
+    if (!groupAutoActivateDone) {
+      groupAutoActivateDone = true;
+      autoActivateGroupOnLogin();
+    }
   } else {
     auth.remaining = null;
     $("authBar").hidden = true;
@@ -1643,6 +1789,8 @@ async function applySession(session) {
     updateAvatarThumb();
     activeGroup = null;
     currentGroupDetail = null;
+    activeGroupDetail = null;
+    groupAutoActivateDone = false;
     syncGroupBanner();
     updateQuota();
     refresh();
@@ -1715,4 +1863,11 @@ if (CONFIGURED) {
   supabase.auth.getSession().then(({ data }) => applySession(data.session));
 } else {
   openGate();
+}
+
+/* PWA：註冊 service worker，讓手機瀏覽器判定「可安裝」並提供離線快取的 app shell */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
 }

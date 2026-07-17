@@ -410,6 +410,55 @@ revoke all on function public.add_group_member_by_email(bigint, text) from publi
 grant execute on function public.create_group(text) to authenticated;
 grant execute on function public.add_group_member_by_email(bigint, text) to authenticated;
 
+-- ── joinable_groups：目前系統裡「我還沒加入」的所有飯搭子圈，讓使用者
+--    自己瀏覽、主動選擇加入（相對於 add_group_member_by_email 那種只能
+--    被圈主動加入的被動流程）。meal_groups 本身的 RLS 只開放成員讀取
+--    自己所屬的群組，這裡用 security definer 繞過，只回傳名稱／人數，
+--    不洩漏成員名單等敏感資訊。 ─────────────────────────────────
+create or replace function public.joinable_groups()
+returns json
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(json_agg(json_build_object(
+           'group_id', g.id, 'name', g.name,
+           'member_count', (select count(*) from public.group_members gm2 where gm2.group_id = g.id)
+         ) order by g.created_at desc), '[]'::json)
+    from public.meal_groups g
+   where not exists (
+     select 1 from public.group_members gm where gm.group_id = g.id and gm.user_id = auth.uid()
+   );
+$$;
+revoke all on function public.joinable_groups() from public, anon;
+grant execute on function public.joinable_groups() to authenticated;
+
+-- ── join_group：主動加入任何一個群組，不需要圈主邀請 ──────────
+create or replace function public.join_group(p_group_id bigint)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_exists boolean;
+begin
+  if v_uid is null then return json_build_object('ok', false, 'error', 'not_authenticated'); end if;
+
+  select exists(select 1 from public.meal_groups where id = p_group_id) into v_exists;
+  if not v_exists then return json_build_object('ok', false, 'error', 'group_not_found'); end if;
+
+  insert into public.group_members (group_id, user_id) values (p_group_id, v_uid)
+  on conflict (group_id, user_id) do nothing;
+
+  return json_build_object('ok', true, 'group_id', p_group_id);
+end;
+$$;
+revoke all on function public.join_group(bigint) from public, anon;
+grant execute on function public.join_group(bigint) to authenticated;
+
 -- ── group_spin_results：每天的轉盤結果，廣播給全組看 ───────────
 create table if not exists public.group_spin_results (
   id          bigint generated always as identity primary key,

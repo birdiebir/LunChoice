@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>午餐大轉輪</title>
 <link rel="stylesheet" href="style.css">
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2563EB">
+<link rel="icon" href="assets/icons/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="午餐轉輪">
 </head>
 <body>
 
@@ -31,8 +39,8 @@
   <main class="board">
     <section class="card wheel-panel" aria-label="轉輪">
       <div class="wheel-tabs" role="tablist" aria-label="轉盤來源">
-        <button class="wheel-tab on" id="tabDefault" type="button" role="tab" aria-selected="true">預設轉盤</button>
-        <button class="wheel-tab" id="tabShared" type="button" role="tab" aria-selected="false">共享轉盤<span class="wheel-tab-count" id="sharedCount" hidden>0</span></button>
+        <button class="wheel-tab on" id="tabShared" type="button" role="tab" aria-selected="true">共享轉盤<span class="wheel-tab-count" id="sharedCount" hidden>0</span></button>
+        <button class="wheel-tab" id="tabDefault" type="button" role="tab" aria-selected="false">預設轉盤</button>
       </div>
       <button class="add-spot-btn" id="addSpotBtn" type="button" hidden>+ 新增地點到共享清單</button>
       <div class="group-banner" id="groupBanner" hidden>
@@ -41,7 +49,7 @@
           <button class="group-banner-leave" id="groupBannerLeave" type="button">離開群組模式</button>
         </div>
         <div class="group-banner-turn" id="groupBannerTurn"></div>
-        <div class="group-banner-result" id="groupBannerResult" hidden></div>
+        <button type="button" class="group-banner-result" id="groupBannerResult" hidden></button>
       </div>
       <div class="match-count">當前篩選 <b id="count">0</b> 家</div>
       <span class="quota-badge" id="quotaBadge" hidden></span>
@@ -117,6 +125,22 @@
       <div class="actions">
         <a class="btn btn-go" id="rMap" target="_blank" rel="noopener">🗺️ 開 Google 地圖出發</a>
         <button class="btn btn-again" id="rAgain">手滑了，再轉一次</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="veil" id="groupResultVeil" aria-hidden="true">
+  <div class="ticket" role="dialog" aria-modal="true" aria-labelledby="groupResultTitle">
+    <button class="close" id="groupResultCloseBtn" aria-label="關閉">×</button>
+    <div class="ticket-inner">
+      <div class="eyebrow">今天大家跟著吃</div>
+      <h3 class="r-title" id="groupResultTitle"></h3>
+      <div class="badges" id="groupResultBadges"></div>
+      <div class="addr" id="groupResultAddr"></div>
+      <div class="group-result-meta" id="groupResultMeta"></div>
+      <div class="actions">
+        <a class="btn btn-go" id="groupResultMap" target="_blank" rel="noopener">🗺️ 開 Google 地圖出發</a>
       </div>
     </div>
   </div>
@@ -232,8 +256,15 @@
         <button class="btn btn-again" id="groupCreateBtn" type="button">＋ 建立</button>
       </div>
       <div class="groups-msg" id="groupListMsg" role="status" aria-live="polite"></div>
+
+      <h3 class="group-list-subhead">我的飯搭子圈</h3>
       <div class="group-list" id="groupList">
         <div class="group-list-empty">還沒有加入任何飯搭子圈</div>
+      </div>
+
+      <h3 class="group-list-subhead">探索飯搭子圈</h3>
+      <div class="group-list" id="allGroupList">
+        <div class="group-list-empty">載入中…</div>
       </div>
     </div>
 
@@ -241,7 +272,7 @@
       <button class="group-detail-back" id="groupDetailBack" type="button">‹ 回列表</button>
       <h2 class="group-detail-name" id="groupDetailName"></h2>
 
-      <div class="group-today-result" id="groupDetailResult" hidden></div>
+      <button type="button" class="group-today-result" id="groupDetailResult" hidden></button>
 
       <div class="group-add-member">
         <input type="email" id="groupAddEmail" placeholder="輸入 email 加入名單…">

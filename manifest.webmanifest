@@ -1,0 +1,17 @@
+{
+  "name": "午餐大轉輪",
+  "short_name": "午餐轉輪",
+  "description": "解決「今天中午吃什麼」的終極方案——步行 10 分鐘內的餐廳命運轉輪",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#2563EB",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
