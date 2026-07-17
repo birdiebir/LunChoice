@@ -907,6 +907,9 @@ function showResult(r) {
   $("rAddr").textContent = r.addr;
   $("rNote").textContent = r.note || "";
   $("rNote").style.display = r.note ? "" : "none";
+  // 決策迴圈裡常會想知道「還能不能再轉一次」，不用關掉結果卡再回去看
+  // 上面的額度徽章（UX 優化 #5）。
+  $("rQuota").textContent = auth.remaining !== null ? `今天還可轉 ${Math.max(0, auth.remaining)} 次` : "";
   $("rMap").href = r.ll
     ? `https://www.google.com/maps/search/${encodeURIComponent(r.name)}/@${r.ll[0]},${r.ll[1]},18z`
     : "https://www.google.com/maps/search/?api=1&query=" +
@@ -1784,6 +1787,7 @@ $("groupUseWheelBtn").onclick = () => {
   const g = myGroups.find(x => x.group_id === currentGroupDetail.group_id);
   activeGroup = { group_id: currentGroupDetail.group_id, name: g ? g.name : "飯搭子圈" };
   activeGroupDetail = currentGroupDetail;
+  groupBannerExpanded = false;
   updateGroupUseWheelBtn();
   closeGroupsModal();
   syncGroupBanner();
@@ -1793,10 +1797,23 @@ $("groupUseWheelBtn").onclick = () => {
 function leaveGroupMode() {
   activeGroup = null;
   activeGroupDetail = null;
+  groupBannerExpanded = false;
   syncGroupBanner();
   refresh();
 }
 $("groupBannerLeave").onclick = leaveGroupMode;
+
+/* 橫幅預設收合成一行摘要，展開狀態只在使用者自己點開／收合時改變，
+   syncGroupBanner() 重複呼叫（例如 Realtime 更新）不會把它重置回去
+   （UX 優化 #1）。換一個群組（groupUseWheelBtn／activateGroup）才重新
+   收合，避免帶著上一個群組展開過的狀態進到新群組。 */
+let groupBannerExpanded = false;
+function setGroupBannerExpanded(expanded) {
+  groupBannerExpanded = expanded;
+  $("groupBannerDetail").hidden = !expanded;
+  $("groupBannerSummary").setAttribute("aria-expanded", String(expanded));
+}
+$("groupBannerSummary").onclick = () => setGroupBannerExpanded(!groupBannerExpanded);
 
 function syncGroupBanner() {
   const banner = $("groupBanner");
@@ -1805,14 +1822,20 @@ function syncGroupBanner() {
   $("groupBannerName").textContent = activeGroup.name;
   const d = (activeGroupDetail && activeGroupDetail.group_id === activeGroup.group_id) ? activeGroupDetail : null;
   const turnEl = $("groupBannerTurn");
+  let summaryText;
   if (d) {
     const spinner = d.members.find(m => m.user_id === d.daily_spinner_id);
     turnEl.textContent = d.is_daily_spinner ? "今天輪到你轉盤囉！" : `今天輪到 ${spinner ? spinner.nickname : "…"} 轉盤`;
     turnEl.classList.toggle("mine", d.is_daily_spinner);
+    if (d.today_result) summaryText = `🍚 ${activeGroup.name} · 今天吃 ${d.today_result.winner_name} 🎉`;
+    else if (d.is_daily_spinner) summaryText = `🍚 ${activeGroup.name} · 輪到你了！`;
+    else summaryText = `🍚 ${activeGroup.name} · 輪到 ${spinner ? spinner.nickname : "…"} 轉盤`;
   } else {
     turnEl.textContent = "讀取輪值資訊中…";
     turnEl.classList.remove("mine");
+    summaryText = `🍚 ${activeGroup.name} · 讀取中…`;
   }
+  $("groupBannerSummaryText").textContent = summaryText;
   const resultEl = $("groupBannerResult");
   if (d && d.today_result) {
     resultEl.hidden = false;
@@ -1823,6 +1846,7 @@ function syncGroupBanner() {
     resultEl.hidden = true;
     resultEl.onclick = null;
   }
+  setGroupBannerExpanded(groupBannerExpanded);
 }
 
 /* 群組看板／群組詳細頁裡「今天吃 XXX」都是同一顆按鈕點開，秀出跟個人轉盤
@@ -1895,6 +1919,7 @@ async function refreshActiveGroupStatus() {
    自己按了一次「用這個群組轉盤」——不用再多一步手動切換。 */
 async function activateGroup(groupId, name) {
   activeGroup = { group_id: groupId, name };
+  groupBannerExpanded = false;
   await refreshActiveGroupStatus();
 }
 
@@ -2058,3 +2083,33 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   });
 }
+
+/* PWA：安裝提示（UX 優化 #2）。瀏覽器判定「可安裝」時會丟出
+   beforeinstallprompt，預設會被瀏覽器自己的迷你資訊列處理掉——攔截下來
+   改用自己的提示條，使用者按「安裝」才真的呼叫 prompt()。使用者關掉
+   過一次就不再顯示（想裝的話瀏覽器選單本來就找得到，不用一直提醒）。 */
+const PWA_DISMISS_KEY = "lunch-wheel-pwa-dismissed";
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", e => {
+  let dismissed = false;
+  try { dismissed = !!localStorage.getItem(PWA_DISMISS_KEY); } catch (err) {}
+  if (dismissed) return;
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  $("pwaInstallBar").hidden = false;
+});
+$("pwaInstallBtn").onclick = async () => {
+  if (!deferredInstallPrompt) return;
+  $("pwaInstallBar").hidden = true;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+};
+$("pwaInstallDismissBtn").onclick = () => {
+  $("pwaInstallBar").hidden = true;
+  try { localStorage.setItem(PWA_DISMISS_KEY, "1"); } catch (e) {}
+};
+window.addEventListener("appinstalled", () => {
+  $("pwaInstallBar").hidden = true;
+  deferredInstallPrompt = null;
+});

@@ -54,6 +54,20 @@
 
   .app { max-width: 1020px; margin: 0 auto; padding: 28px 20px 48px; }
 
+  /* ── PWA 安裝提示條（UX 優化 #2）── */
+  .pwa-install-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--radius-md);
+    padding: 10px 14px; margin-bottom: 18px; font-size: var(--fs-md); color: var(--text);
+  }
+  .pwa-install-bar[hidden] { display: none; }
+  .pwa-install-text { flex: 1; min-width: 180px; }
+  .pwa-install-bar .btn { padding: 8px 16px; font-size: var(--fs-md); flex: none; }
+  .pwa-install-dismiss {
+    background: none; border: none; color: var(--text-2); font-size: 20px; cursor: pointer;
+    line-height: 1; padding: 11px; flex: none;
+  }
+
   /* ── header ── */
   header.masthead {
     display: flex; justify-content: space-between; align-items: center;
@@ -101,12 +115,27 @@
   }
   .add-spot-btn:hover { filter: brightness(1.04); }
 
-  /* ── 飯搭子圈：群組模式橫幅 ── */
+  /* ── 飯搭子圈：群組模式橫幅 ──
+     預設只顯示一行摘要（圈名＋目前狀態），點了才展開圈名/離開按鈕/完整
+     輪值與結果——群組模式的橫幅原本展開就是 3-4 行，會把轉盤往下擠一大
+     截，手機上要多滑一段才看得到「轉！」按鈕（UX 優化 #1）。 */
   .group-banner {
-    width: 100%; border-radius: 14px; padding: 12px 14px; font-size: var(--fs-md);
-    background: var(--accent-soft); color: var(--text); display: flex; flex-direction: column; gap: 8px;
+    width: 100%; border-radius: 14px; font-size: var(--fs-md);
+    background: var(--accent-soft); color: var(--text); overflow: hidden;
   }
   .group-banner[hidden] { display: none; }
+  .group-banner-summary {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: none; border: none; padding: 13px 14px; font: inherit; font-size: 13.5px; font-weight: 800;
+    color: var(--text); cursor: pointer; text-align: left;
+  }
+  .group-banner-summary-text {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .group-banner-chevron { flex: none; color: var(--text-2); transition: transform .15s; }
+  .group-banner-summary[aria-expanded="true"] .group-banner-chevron { transform: rotate(180deg); }
+  .group-banner-detail { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 12px; }
+  .group-banner-detail[hidden] { display: none; }
   .group-banner-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .group-banner-title {
     font-weight: 800; font-size: 13.5px; min-width: 0;
@@ -277,6 +306,7 @@
   .badge.money { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
   .ticket .addr { font-size: 13.5px; color: var(--text-2); }
   .ticket .note { font-size: var(--fs-md); color: var(--amber); font-weight: 700; }
+  .ticket .r-quota { font-size: var(--fs-sm); color: var(--text-2); }
   .group-result-meta { font-size: 13.5px; color: var(--text-2); }
   .ticket .actions { display: flex; flex-direction: column; gap: 9px; margin-top: 6px; }
   .btn {

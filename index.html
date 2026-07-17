@@ -17,6 +17,11 @@
 <body>
 
 <div class="app">
+  <div class="pwa-install-bar" id="pwaInstallBar" hidden>
+    <span class="pwa-install-text">📲 把午餐轉輪加到主畫面，下次一鍵打開</span>
+    <button class="btn btn-go" id="pwaInstallBtn" type="button">安裝</button>
+    <button class="pwa-install-dismiss" id="pwaInstallDismissBtn" type="button" aria-label="不再顯示">×</button>
+  </div>
   <header class="masthead">
     <div class="masthead-title">
       <h1 class="brand" id="brand">午餐大<span class="zhuan">轉</span>輪</h1>
@@ -44,12 +49,18 @@
       </div>
       <button class="add-spot-btn" id="addSpotBtn" type="button" hidden>+ 新增地點到共享清單</button>
       <div class="group-banner" id="groupBanner" hidden>
-        <div class="group-banner-head">
-          <span class="group-banner-title">🍚 飯搭子圈：<span id="groupBannerName"></span></span>
-          <button class="group-banner-leave" id="groupBannerLeave" type="button">離開群組模式</button>
+        <button type="button" class="group-banner-summary" id="groupBannerSummary" aria-expanded="false" aria-controls="groupBannerDetail">
+          <span class="group-banner-summary-text" id="groupBannerSummaryText"></span>
+          <span class="group-banner-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div class="group-banner-detail" id="groupBannerDetail" hidden>
+          <div class="group-banner-head">
+            <span class="group-banner-title">🍚 飯搭子圈：<span id="groupBannerName"></span></span>
+            <button class="group-banner-leave" id="groupBannerLeave" type="button">離開群組模式</button>
+          </div>
+          <div class="group-banner-turn" id="groupBannerTurn" aria-live="polite"></div>
+          <button type="button" class="group-banner-result" id="groupBannerResult" hidden aria-live="polite"></button>
         </div>
-        <div class="group-banner-turn" id="groupBannerTurn" aria-live="polite"></div>
-        <button type="button" class="group-banner-result" id="groupBannerResult" hidden aria-live="polite"></button>
       </div>
       <div class="wheel-meta">
         <div class="match-count">當前篩選 <b id="count">0</b> 家</div>
@@ -124,6 +135,7 @@
       <div class="badges" id="rBadges"></div>
       <div class="addr" id="rAddr"></div>
       <div class="note" id="rNote"></div>
+      <div class="r-quota" id="rQuota"></div>
       <div class="actions">
         <a class="btn btn-go" id="rMap" target="_blank" rel="noopener">🗺️ 開 Google 地圖出發</a>
         <button class="btn btn-again" id="rAgain">手滑了，再轉一次</button>
