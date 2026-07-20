@@ -184,6 +184,7 @@
   /* 「當前篩選 X 家」跟「今天還可轉 N 次」語意上是同一組資訊，用一個
      容器包起來讓間距比 panel 其他區塊窄，視覺上讀成一組（issue #044）。 */
   .wheel-meta { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .wheel-meta[hidden] { display: none; }
   .match-count {
     font-size: var(--fs-base); color: var(--text-2); letter-spacing: 1px;
     display: flex; align-items: center; gap: 8px;
@@ -353,6 +354,7 @@
   }
   .btn:hover { filter: brightness(1.06); }
   .btn:active { transform: scale(.98); }
+  .btn[hidden] { display: none; } /* .btn 的 display:block 會蓋掉 hidden 屬性的預設樣式，要另外補（issue #046） */
   .btn-go { background: var(--accent); color: var(--accent-ink); }
   .btn-again { background: var(--chip-bg); color: var(--text); }
   .ticket .close {
