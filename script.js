@@ -38,6 +38,13 @@ const CONFIGURED = !SUPABASE_URL.includes("YOUR-PROJECT");
 const supabase = CONFIGURED ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 const auth = { user: null, remaining: null, limit: DAILY_LIMIT, busy: false, bonusAvailable: false };
 
+/* ══════════════════════════════════════════════════════════
+   LINE LIFF 設定 — 從 LINE Developers console 建立 LIFF app 之後
+   把 ID 填進來（目前先留空，LIFF init 會失敗，整個網頁就當成一般
+   外部瀏覽器繼續跑，不影響既有功能）
+   ══════════════════════════════════════════════════════════ */
+const LIFF_ID = "2010765168-hNJYFRUv"; // 嘿嘿午餐轉盤 LIFF app（Channel: 嘿嘿午餐轉盤，Provider: Bir）
+
 /* ══════════ 資料 ══════════ */
 /* DATA-START */
 const RESTAURANTS = [
@@ -1021,6 +1028,8 @@ function showResult(r) {
     ? `https://www.google.com/maps/search/${encodeURIComponent(r.name)}/@${r.ll[0]},${r.ll[1]},18z`
     : "https://www.google.com/maps/search/?api=1&query=" +
       encodeURIComponent("台北市 " + r.name + " " + r.addr);
+  $("rLiffMsg").textContent = "";
+  $("liffReportBtn").disabled = false;
   openVeil("veil");
   // 轉盤結果是全站最核心的彈窗，焦點一定要主動移進去，不然螢幕閱讀器
   // 使用者完全不會知道跳出了新內容（issue #009）。
@@ -1276,6 +1285,67 @@ $("rShareBtn").onclick = () => {
   if (!currentResult) return;
   shareResult(`今天午餐吃：${currentResult.name} 🍽️`, $("rMap").href, $("rShareBtn"));
 };
+
+/* ══════════════════════════════════════════════════════════
+   LINE LIFF — 在 LINE App 內開啟時，讓使用者一鍵把轉盤結果回報到
+   聊天室。isInLiffClient() 是唯一的雙平台分歧點：外部瀏覽器打開
+   （或 LIFF SDK 載入失敗／liff.init 失敗，例如 LIFF_ID 還沒填）時
+   一律當成本來的網頁跑，LINE 相關按鈕／個人資料維持隱藏、也完全
+   不會呼叫 liff.getProfile()。 */
+let liffReady = false;
+function isInLiffClient() {
+  return liffReady && typeof liff !== "undefined" && liff.isInClient();
+}
+async function initLiff() {
+  if (typeof liff === "undefined") return; // SDK 沒載入成功（被擋、離線…），當一般網頁繼續跑
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    liffReady = true;
+  } catch (e) {
+    // 初始化失敗（LIFF_ID 還沒填、不在 LINE 環境、網路問題…）：
+    // 不影響網頁其他功能，LINE 相關按鈕/資料維持隱藏即可。
+    liffReady = false;
+    return;
+  }
+  if (!isInLiffClient()) return;
+  $("liffReportBtn").hidden = false;
+  try {
+    const profile = await liff.getProfile();
+    showLiffProfile(profile);
+  } catch (e) {
+    // 抓不到 profile 不影響回報結果按鈕，安靜失敗即可。
+  }
+}
+function showLiffProfile(profile) {
+  $("lineProfileName").textContent = profile.displayName || "";
+  if (profile.pictureUrl) {
+    $("lineProfileAvatar").src = profile.pictureUrl;
+    $("lineProfileAvatar").hidden = false;
+  }
+  $("lineProfile").hidden = false;
+}
+function setLiffMsg(text, kind) {
+  const m = $("rLiffMsg");
+  m.textContent = text;
+  m.className = "r-liff-msg" + (kind ? " " + kind : "");
+}
+$("liffReportBtn").onclick = async () => {
+  if (!currentResult || !isInLiffClient()) return;
+  const btn = $("liffReportBtn");
+  btn.disabled = true;
+  setLiffMsg("回報中…", "");
+  try {
+    await liff.sendMessages([{
+      type: "text",
+      text: `根據午餐大轉盤，我今天的午餐是：【${currentResult.name}】${$("rMap").href}`
+    }]);
+    liff.closeWindow();
+  } catch (e) {
+    setLiffMsg("⚠️ 回報失敗，請稍後再試", "err");
+    btn.disabled = false;
+  }
+};
+
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
@@ -2376,6 +2446,10 @@ syncOriginTabs();
 recomputeCatsInData();
 syncGroupBanner();
 refresh();
+
+/* 啟動 LIFF（不用等它跑完，跟 Supabase 登入流程互不影響；LINE 相關
+   UI 在 initLiff() 判斷出「真的在 LINE 內」之前都維持隱藏） */
+initLiff();
 
 /* 啟動 Supabase 登入流程 */
 if (CONFIGURED) {

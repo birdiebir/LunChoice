@@ -25,6 +25,10 @@
   <header class="masthead">
     <div class="masthead-title">
       <h1 class="brand" id="brand">午餐大<span class="zhuan">轉</span>輪</h1>
+      <div class="line-profile" id="lineProfile" hidden>
+        <img class="line-profile-avatar" id="lineProfileAvatar" alt="" hidden>
+        <span id="lineProfileName"></span>
+      </div>
     </div>
     <div class="auth-bar" id="authBar" hidden>
       <button id="groupsBtn" type="button">飯搭子圈</button>
@@ -147,8 +151,10 @@
       <div class="actions">
         <a class="btn btn-go" id="rMap" target="_blank" rel="noopener">🗺️ 開 Google 地圖出發</a>
         <button class="btn btn-again" id="rShareBtn" type="button">📤 分享給朋友</button>
+        <button class="btn btn-go" id="liffReportBtn" type="button" hidden>✅ 回報結果</button>
         <button class="btn btn-again" id="rAgain">手滑了，再轉一次</button>
       </div>
+      <div class="r-liff-msg" id="rLiffMsg" role="status" aria-live="polite"></div>
     </div>
   </div>
 </div>
@@ -344,6 +350,9 @@
 
 <div id="srAnnounce" class="sr-only" role="status" aria-live="polite"></div>
 
+<!-- LINE LIFF SDK：一定要在 script.js（type="module"，延後執行）之前用一般
+     <script> 載入，才能保證 window.liff 在 script.js 開始跑的時候已經存在。 -->
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script type="module" src="script.js"></script>
 </body>
 </html>

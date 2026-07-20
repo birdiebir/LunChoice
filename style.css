@@ -85,6 +85,13 @@
   .brand.spinning .zhuan { animation: zhuan-spin 1s linear infinite; }
   @keyframes zhuan-spin { to { transform: rotate(360deg); } }
 
+  /* 在 LINE App 內開啟（LIFF）時顯示的 LINE 個人資料，外部瀏覽器打開
+     時整個 hidden，不會出現在畫面上。 */
+  .line-profile { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-2); }
+  .line-profile[hidden] { display: none; }
+  .line-profile-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+  .line-profile-avatar[hidden] { display: none; }
+
   /* ── layout ── */
   main.board { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
   @media (max-width: 860px) { main.board { grid-template-columns: 1fr; } }
@@ -337,6 +344,8 @@
   .ticket .r-quota { font-size: var(--fs-sm); color: var(--text-2); }
   .group-result-meta { font-size: 13.5px; color: var(--text-2); }
   .ticket .actions { display: flex; flex-direction: column; gap: 9px; margin-top: 6px; }
+  .r-liff-msg { font-size: var(--fs-sm); min-height: 16px; text-align: center; }
+  .r-liff-msg.err { color: var(--action); }
   .btn {
     border: none; border-radius: var(--radius-md); padding: 12px 16px; font: inherit; font-size: var(--fs-lg);
     font-weight: 700; cursor: pointer; text-decoration: none; display: block; text-align: center;
