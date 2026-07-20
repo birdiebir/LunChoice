@@ -44,9 +44,11 @@
   <main class="board">
     <section class="card wheel-panel" aria-label="轉輪">
       <div class="wheel-tabs" role="tablist" aria-label="轉盤來源">
-        <button class="wheel-tab on" id="tabShared" type="button" role="tab" aria-selected="true">共享轉盤<span class="wheel-tab-count" id="sharedCount" hidden>0</span></button>
-        <button class="wheel-tab" id="tabDefault" type="button" role="tab" aria-selected="false">預設轉盤</button>
+        <button class="wheel-tab on" id="tabShared" type="button" role="tab" aria-selected="true">飯搭子轉盤<span class="wheel-tab-count" id="sharedCount" hidden>0</span></button>
+        <button class="wheel-tab" id="tabPersonal" type="button" role="tab" aria-selected="false">個人轉盤<span class="wheel-tab-count" id="personalCount" hidden>0</span></button>
+        <button class="wheel-tab" id="tabDefault" type="button" role="tab" aria-selected="false" hidden>預設轉盤</button>
       </div>
+      <div class="group-wheel-switcher" id="groupWheelSwitcher" hidden></div>
       <button class="add-spot-btn" id="addSpotBtn" type="button" hidden>+ 新增地點到共享清單</button>
       <div class="group-banner" id="groupBanner" hidden>
         <button type="button" class="group-banner-summary" id="groupBannerSummary" aria-expanded="false" aria-controls="groupBannerDetail">
@@ -62,7 +64,12 @@
           <button type="button" class="group-banner-result" id="groupBannerResult" hidden aria-live="polite"></button>
         </div>
       </div>
-      <div class="wheel-meta">
+      <div class="group-gate" id="groupGate" hidden>
+        <div class="group-gate-emoji" aria-hidden="true">🍚</div>
+        <p class="group-gate-text">還沒加入任何飯搭子圈，加入或建立一個就能大家一起編輯共享轉盤</p>
+        <button class="btn btn-go" id="groupGateBtn" type="button">建立或加入飯搭子圈</button>
+      </div>
+      <div class="wheel-meta" id="wheelMeta">
         <div class="match-count">當前篩選 <b id="count">0</b> 家</div>
         <span class="quota-badge" id="quotaBadge" hidden></span>
       </div>
@@ -92,11 +99,12 @@
 
       <div class="field" id="originField">
         <label>出發點</label>
-        <div class="wheel-tabs origin-tabs" role="tablist" aria-label="出發點">
-          <button class="wheel-tab on" id="originDefaultBtn" type="button" role="tab" aria-selected="true">基隆路一段 200 號</button>
-          <button class="wheel-tab" id="originGpsBtn" type="button" role="tab" aria-selected="false">目前位置</button>
+        <div class="wheel-tabs origin-tabs" role="tablist" aria-label="出發點" id="originTabs">
+          <button class="wheel-tab on" id="originDefaultBtn" type="button" role="tab" aria-selected="true" data-origin-key="default">基隆路一段 200 號</button>
+          <button class="wheel-tab" id="originGpsBtn" type="button" role="tab" aria-selected="false" data-origin-key="gps">目前位置</button>
+          <button class="origin-add-btn" id="originAddBtn" type="button">＋ 新增地標</button>
         </div>
-        <div class="origin-msg" id="originMsg" role="status" aria-live="polite">預設轉盤／共享轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）</div>
+        <div class="origin-msg" id="originMsg" role="status" aria-live="polite">飯搭子轉盤／個人轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）</div>
       </div>
 
       <div class="field">
@@ -120,7 +128,7 @@
     </aside>
   </main>
 
-  <details class="roster">
+  <details class="roster" id="rosterDetails">
     <summary>看看今天名單裡有哪些店 ▾</summary>
     <div class="roster-grid" id="roster"></div>
   </details>
@@ -231,6 +239,32 @@
     <div class="spot-msg" id="spotMsg" role="status" aria-live="polite"></div>
     <button class="btn btn-go" id="spotSubmitBtn" type="button">新增到共享清單</button>
     <button class="btn btn-again" id="spotCancelBtn" type="button">取消</button>
+  </div>
+</div>
+
+<div class="spot-veil" id="originAddVeil" aria-hidden="true">
+  <div class="spot-card" role="dialog" aria-modal="true" aria-labelledby="originAddTitle">
+    <button class="close" id="originAddCloseBtn" aria-label="關閉">×</button>
+    <h2 id="originAddTitle">新增常用出發地標</h2>
+    <p class="spot-hint">貼 Google Maps 網址可以自動帶入地標名稱、經緯度，之後選這個地標，走路時間都會自動用它重算。</p>
+
+    <label class="spot-field">
+      <span>Google Maps 網址</span>
+      <div class="spot-quick">
+        <input type="url" id="originAddUrl" placeholder="貼上 Google Maps 網址…">
+        <button class="btn btn-again" id="originAddAutoFillBtn" type="button">自動帶入</button>
+      </div>
+    </label>
+    <div class="spot-quick-msg" id="originAddQuickMsg"></div>
+
+    <label class="spot-field">
+      <span>地標名稱</span>
+      <input type="text" id="originAddName" maxlength="40" placeholder="例如：公司、住家">
+    </label>
+
+    <div class="spot-msg" id="originAddMsg" role="status" aria-live="polite"></div>
+    <button class="btn btn-go" id="originAddSubmitBtn" type="button">新增地標</button>
+    <button class="btn btn-again" id="originAddCancelBtn" type="button">取消</button>
   </div>
 </div>
 

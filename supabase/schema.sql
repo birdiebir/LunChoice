@@ -209,10 +209,13 @@ grant execute on function public.spin_status()             to authenticated;
 grant execute on function public.claim_bonus_spin()           to authenticated;
 grant execute on function public.set_spin_result(bigint, text, text) to authenticated;
 
--- ── shared_spots：全局共享轉盤名單，所有登入使用者共讀共寫 ──────
--- 一開始是空的，任何人新增的地點會透過 Supabase Realtime 即時推播給
--- 所有正在瀏覽的使用者（不用重新整理頁面）。刻意不開放 update/delete，
--- 先求「大家一起加」，內容治理（檢舉、刪除）之後有需要再加。
+-- ── shared_spots：飯搭子圈的共享轉盤名單 ─────────────────────
+-- 原本是全站共用一份，後來改成每個飯搭子圈自己一份（group_id，見下方
+-- 「shared_spots 改成群組專屬」那一段，要等 meal_groups/group_members
+-- 建好才能接上，所以 RLS 政策實際生效版本寫在那邊，這裡先建表）。
+-- 新增的地點會透過 Supabase Realtime 即時推播給同群組正在瀏覽的成員
+-- （不用重新整理頁面）。刻意不開放 delete，先求「大家一起加」，內容
+-- 治理（檢舉、刪除）之後有需要再加。
 create table if not exists public.shared_spots (
   id         bigint generated always as identity primary key,
   name       text not null,
@@ -400,6 +403,140 @@ create policy "members can read group roster" on public.group_members
 revoke all on public.group_members from public, anon;
 grant select on public.group_members to authenticated;
 -- 刻意不開放直接 insert：新增成員只能透過下面的函式，才能檢查權限跟目標帳號存在。
+
+-- ── shared_spots 改成群組專屬：從「全站共用一份」收斂成「每個飯搭子圈
+--    自己的共享轉盤」，一定要等 meal_groups/group_members 都建好才能接上，
+--    所以放在這裡而不是 shared_spots 表本身那一段。
+--    上線當下把既有資料一次性歸戶給「吃吃吃」這個群組（專案的真實資料
+--    決定，不是通用邏輯）；全新專案跑這份 schema 時 shared_spots 是空的，
+--    這行 update 不會動到任何資料。 ──
+alter table public.shared_spots add column if not exists group_id bigint references public.meal_groups(id) on delete cascade;
+
+update public.shared_spots
+   set group_id = (select id from public.meal_groups where name = '吃吃吃' limit 1)
+ where group_id is null;
+
+alter table public.shared_spots alter column group_id set not null;
+
+create index if not exists shared_spots_group_id_idx on public.shared_spots (group_id);
+
+-- shared_spots 的政策不能直接 `exists (select 1 from group_members ...)`：
+-- group_members 自己的讀取政策也是查自己（member can read group roster），
+-- 從別的表的政策間接觸發這條自我參照政策，Postgres 會判斷成 infinite
+-- recursion 直接整個查詢失敗（500，實測踩過一次）。用 security definer
+-- 函式包住這個檢查，函式內部以 table owner 身份查 group_members、不會
+-- 再觸發它自己的 RLS，打斷遞迴鏈。
+create or replace function public.is_group_member(p_group_id bigint, p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.group_members gm
+     where gm.group_id = p_group_id and gm.user_id = p_user_id
+  );
+$$;
+revoke all on function public.is_group_member(bigint, uuid) from public, anon;
+grant execute on function public.is_group_member(bigint, uuid) to authenticated;
+
+drop policy if exists "read shared spots" on public.shared_spots;
+create policy "read shared spots" on public.shared_spots
+  for select using (public.is_group_member(group_id, auth.uid()));
+
+drop policy if exists "insert own shared spot" on public.shared_spots;
+create policy "insert own shared spot" on public.shared_spots
+  for insert with check (
+    auth.uid() = created_by and public.is_group_member(group_id, auth.uid())
+  );
+
+drop policy if exists "any member can update shared spot" on public.shared_spots;
+create policy "any member can update shared spot" on public.shared_spots
+  for update using (public.is_group_member(group_id, auth.uid()))
+  with check (public.is_group_member(group_id, auth.uid()));
+
+-- ── personal_spots：個人轉盤，跟 shared_spots 同構但只有自己看得到/
+--    改得到，不開放共編（純私人清單）。 ──
+create table if not exists public.personal_spots (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  name       text not null,
+  cat        text not null,
+  price_min  int not null default 0,
+  price_max  int not null default 0,
+  walk       int not null default 0,
+  addr       text not null default '',
+  note       text not null default '',
+  lat        double precision,
+  lng        double precision,
+  maps_url   text not null default '',
+  created_at timestamptz not null default now(),
+  constraint personal_spots_name_len check (char_length(trim(name)) > 0 and char_length(name) <= 80),
+  constraint personal_spots_walk_range check (walk >= 0 and walk <= 240),
+  constraint personal_spots_price_range check (price_min >= 0 and price_max >= price_min),
+  constraint personal_spots_addr_len check (char_length(addr) <= 200),
+  constraint personal_spots_note_len check (char_length(note) <= 500),
+  constraint personal_spots_maps_url_len check (char_length(maps_url) <= 500),
+  constraint personal_spots_cat_whitelist check (cat in ('麵食','飯食便當','日式','韓式','東南亞','西式','台式小吃','健康餐盒','鍋物','咖啡輕食','其他'))
+);
+
+create index if not exists personal_spots_user_id_idx on public.personal_spots (user_id);
+
+alter table public.personal_spots enable row level security;
+
+drop policy if exists "read own personal spots" on public.personal_spots;
+create policy "read own personal spots" on public.personal_spots
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "insert own personal spot" on public.personal_spots;
+create policy "insert own personal spot" on public.personal_spots
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "update own personal spot" on public.personal_spots;
+create policy "update own personal spot" on public.personal_spots
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+revoke all on public.personal_spots from public, anon;
+grant select, insert, update on public.personal_spots to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'personal_spots'
+  ) then
+    alter publication supabase_realtime add table public.personal_spots;
+  end if;
+end $$;
+
+-- ── user_origins：使用者自己的常用出發地標，純個人資料（不放 profiles，
+--    因為 profiles 目前是全體可讀，不適合塞私人地標）。v1 先不開放
+--    刪除/編輯。 ──
+create table if not exists public.user_origins (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  name       text not null,
+  lat        double precision not null,
+  lng        double precision not null,
+  created_at timestamptz not null default now(),
+  constraint user_origins_name_len check (char_length(trim(name)) > 0 and char_length(name) <= 40)
+);
+
+create index if not exists user_origins_user_id_idx on public.user_origins (user_id);
+
+alter table public.user_origins enable row level security;
+
+drop policy if exists "read own origins" on public.user_origins;
+create policy "read own origins" on public.user_origins
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "insert own origin" on public.user_origins;
+create policy "insert own origin" on public.user_origins
+  for insert with check (auth.uid() = user_id);
+
+revoke all on public.user_origins from public, anon;
+grant select, insert on public.user_origins to authenticated;
 
 -- ── create_group：建立群組，建立者自動成為第一個成員 ──────────
 create or replace function public.create_group(p_name text)

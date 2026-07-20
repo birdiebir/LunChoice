@@ -471,7 +471,7 @@ const state = {
   budget: Math.min(500, Math.max(100, store.budget ?? 500)),
   walk: store.walk ?? 10,
   cats: new Set(Array.isArray(store.cats) ? store.cats.filter(c => allCatsInData.includes(c)) : allCatsInData),
-  wheelMode: store.wheelMode === "default" ? "default" : "shared",
+  wheelMode: store.wheelMode === "personal" ? "personal" : "shared",
   rot: -Math.PI / 2,
   spinning: false
 };
@@ -485,10 +485,15 @@ function persist() {
   } catch (e) {}
 }
 
-/* ══════════ 共享轉盤：資料來源 ══════════ */
-let sharedSpots = [];
+/* ══════════ 飯搭子轉盤／個人轉盤：資料來源 ══════════ */
+let sharedSpots = [];   // 目前選定的飯搭子圈的共享清單
+let personalSpots = []; // 目前登入者的個人清單
 
-function activeList() { return state.wheelMode === "shared" ? sharedSpots : RESTAURANTS; }
+function activeList() {
+  if (state.wheelMode === "personal") return personalSpots;
+  if (state.wheelMode === "shared") return sharedSpots;
+  return RESTAURANTS;
+}
 
 function recomputeCatsInData() {
   allCatsInData = [...new Set(activeList().map(r => r.cat))]
@@ -505,6 +510,7 @@ const avg = r => (r.price[0] + r.price[1]) / 2;
    轉盤是新增/編輯當下依當時出發點算出來存的）；切到「目前位置」才
    會拿座標即時重算。 */
 let customOrigin = null; // [lat, lng] | null
+let currentOriginKey = "default"; // "default" | "gps" | "preset:<id>"，只用來同步出發點按鈕的選取樣式
 const walkMinutesFor = r =>
   (!customOrigin || !r.ll) ? r.walk : estimateWalkMinutes(r.ll[0], r.ll[1], customOrigin);
 
@@ -615,15 +621,19 @@ function drawWheel(list) {
 /* ══════════ 畫面同步 ══════════ */
 let currentList = [];
 function refresh() {
+  syncGroupWheelUI();
   currentList = eligible();
   $("count").textContent = currentList.length;
   $("stage").classList.toggle("empty", currentList.length === 0);
-  $("emptyNote").innerHTML = (state.wheelMode === "shared" && sharedSpots.length === 0)
-    ? (sharedSpotsLoadFailed ? "共享清單載入失敗 😥<br>請重新整理再試一次" : "共享清單還是空的 🌱<br>來新增第一家吧")
+  $("emptyNote").innerHTML =
+    (state.wheelMode === "shared" && sharedSpots.length === 0)
+      ? (sharedSpotsLoadFailed ? "飯搭子圈清單載入失敗 😥<br>請重新整理再試一次" : "飯搭子圈清單還是空的 🌱<br>來新增第一家吧")
+    : (state.wheelMode === "personal" && personalSpots.length === 0)
+      ? (personalSpotsLoadFailed ? "個人清單載入失敗 😥<br>請重新整理再試一次" : "個人清單還是空的 🌱<br>來新增第一家吧")
     : "沒有符合條件的店 😥<br>放寬一點預算或走路時間吧";
   $("spinBtn").disabled =
     currentList.length === 0 || state.spinning || auth.busy || !auth.user || outOfSpins() ||
-    (activeGroup && !isMyGroupTurn());
+    (state.wheelMode !== "personal" && activeGroup && !isMyGroupTurn());
   // canvas 本身沒有文字內容，aria-label 是螢幕閱讀器唯一能得到的資訊，
   // 要跟著目前篩選結果動態更新，不能是一句固定不變的「午餐轉輪」（issue #033）。
   $("wheel").setAttribute("aria-label", `午餐轉輪，目前 ${currentList.length} 家候選`);
@@ -671,7 +681,7 @@ function renderRoster() {
     div.className = "r-row" + (!inFilter ? " skipped" : "");
     div.dataset.name = r.name;
     div.innerHTML = `
-      ${state.wheelMode === "shared" ? '<button class="r-edit-btn" type="button" aria-label="編輯這筆資料">✎</button>' : ""}
+      ${(state.wheelMode === "shared" || state.wheelMode === "personal") ? '<button class="r-edit-btn" type="button" aria-label="編輯這筆資料">✎</button>' : ""}
       <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span></div>
       <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${walkMinutesFor(r)} 分</span><span>${escapeHtml(r.addr)}</span></div>
       ${r.note ? `<div class="r-note">${escapeHtml(r.note)}</div>` : ""}
@@ -685,7 +695,7 @@ function renderRoster() {
   }
 }
 
-/* ══════════ 共享轉盤：切換頁籤、載入、即時同步 ══════════ */
+/* ══════════ 飯搭子轉盤：切換群組、載入、即時同步 ══════════ */
 function mapSharedRow(row) {
   return {
     id: row.id,
@@ -710,10 +720,10 @@ function updateSharedCountBadge() {
    長得一模一樣——多這個旗標讓 refresh() 的空狀態文案能夠分辨兩者，
    不然使用者會誤以為清單真的是空的而跑去重複新增（issue #020）。 */
 let sharedSpotsLoadFailed = false;
-async function loadSharedSpots() {
+async function loadSharedSpots(groupId) {
   try {
     const { data, error } = await supabase
-      .from("shared_spots").select("*").order("created_at", { ascending: true });
+      .from("shared_spots").select("*").eq("group_id", groupId).order("created_at", { ascending: true });
     if (error) throw error;
     sharedSpots = data.map(mapSharedRow);
     sharedSpotsLoadFailed = false;
@@ -730,23 +740,79 @@ function announce(text) {
 }
 
 let sharedChannel = null;
-function subscribeSharedSpots() {
-  if (sharedChannel) return;
-  sharedChannel = supabase.channel("shared_spots_changes")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "shared_spots" }, payload => {
+function subscribeSharedSpots(groupId) {
+  sharedChannel = supabase.channel("shared_spots_changes_" + groupId)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "shared_spots", filter: "group_id=eq." + groupId }, payload => {
       if (sharedSpots.some(s => s.id === payload.new.id)) return;
       sharedSpots.push(mapSharedRow(payload.new));
       updateSharedCountBadge();
-      announce(`共享清單新增了：${payload.new.name}`);
+      announce(`飯搭子圈清單新增了：${payload.new.name}`);
       if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
     })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "shared_spots" }, payload => {
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "shared_spots", filter: "group_id=eq." + groupId }, payload => {
       // 別人編輯了共享地點：同步更新本機資料，讓大家的畫面即時一致
       const i = sharedSpots.findIndex(s => s.id === payload.new.id);
       if (i === -1) return;
       sharedSpots[i] = mapSharedRow(payload.new);
-      announce(`共享清單更新了：${payload.new.name}`);
+      announce(`飯搭子圈清單更新了：${payload.new.name}`);
       if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
+    })
+    .subscribe();
+}
+
+/* 切換到另一個飯搭子圈（或離開群組模式，groupId 傳 null）時，把上一個
+   群組的訂閱關掉、清空舊資料，避免殘留上一個群組的地點。 */
+let groupSpotsGroupId = null;
+async function switchGroupSpots(groupId) {
+  if (groupSpotsGroupId === groupId) return;
+  groupSpotsGroupId = groupId;
+  if (sharedChannel) { supabase.removeChannel(sharedChannel); sharedChannel = null; }
+  sharedSpots = [];
+  sharedSpotsLoadFailed = false;
+  updateSharedCountBadge();
+  if (groupId == null) {
+    if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
+    return;
+  }
+  await loadSharedSpots(groupId);
+  subscribeSharedSpots(groupId);
+}
+
+/* ══════════ 個人轉盤：載入、即時同步 ══════════ */
+let personalSpotsLoadFailed = false;
+function updatePersonalCountBadge() {
+  const badge = $("personalCount");
+  badge.hidden = personalSpots.length === 0;
+  badge.textContent = personalSpots.length;
+}
+async function loadPersonalSpots() {
+  try {
+    const { data, error } = await supabase
+      .from("personal_spots").select("*").order("created_at", { ascending: true });
+    if (error) throw error;
+    personalSpots = data.map(mapSharedRow);
+    personalSpotsLoadFailed = false;
+  } catch (e) {
+    personalSpotsLoadFailed = true;
+  }
+  updatePersonalCountBadge();
+  if (state.wheelMode === "personal") { recomputeCatsInData(); refresh(); }
+}
+let personalChannel = null;
+function subscribePersonalSpots() {
+  if (personalChannel) return;
+  personalChannel = supabase.channel("personal_spots_changes")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "personal_spots" }, payload => {
+      if (personalSpots.some(s => s.id === payload.new.id)) return;
+      personalSpots.push(mapSharedRow(payload.new));
+      updatePersonalCountBadge();
+      if (state.wheelMode === "personal") { recomputeCatsInData(); refresh(); }
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "personal_spots" }, payload => {
+      const i = personalSpots.findIndex(s => s.id === payload.new.id);
+      if (i === -1) return;
+      personalSpots[i] = mapSharedRow(payload.new);
+      if (state.wheelMode === "personal") { recomputeCatsInData(); refresh(); }
     })
     .subscribe();
 }
@@ -777,7 +843,19 @@ function syncWheelModeUI() {
   $("tabShared").classList.toggle("on", mode === "shared");
   $("tabShared").setAttribute("aria-selected", String(mode === "shared"));
   $("tabShared").tabIndex = mode === "shared" ? 0 : -1;
-  $("addSpotBtn").hidden = mode !== "shared";
+  $("tabPersonal").classList.toggle("on", mode === "personal");
+  $("tabPersonal").setAttribute("aria-selected", String(mode === "personal"));
+  $("tabPersonal").tabIndex = mode === "personal" ? 0 : -1;
+  $("addSpotBtn").textContent = mode === "personal" ? "+ 新增地點到個人清單" : "+ 新增地點到共享清單";
+}
+/* 切到飯搭子轉盤分頁，但目前沒有綁定中的群組（例如剛登入、或剛建立/
+   加入第一個群組）時，直接自動選第一個群組，不用使用者再多點一次
+   「用這個群組轉盤」。使用者主動按過「離開群組模式」之後不會在這裡
+   被自動拉回去——只有「切分頁」這個動作會觸發。 */
+function ensureGroupWheelActive() {
+  if (state.wheelMode !== "shared" || activeGroup || myGroups.length === 0) return;
+  const g = myGroups[0];
+  activateGroup(g.group_id, g.name);
 }
 function setWheelMode(mode) {
   if (state.wheelMode === mode) return;
@@ -785,10 +863,12 @@ function setWheelMode(mode) {
   syncWheelModeUI();
   recomputeCatsInData();
   refresh();
+  if (mode === "shared") ensureGroupWheelActive();
 }
 $("tabDefault").onclick = () => setWheelMode("default");
 $("tabShared").onclick = () => setWheelMode("shared");
-bindTabArrowKeys([$("tabShared"), $("tabDefault")], tab => tab.click());
+$("tabPersonal").onclick = () => setWheelMode("personal");
+bindTabArrowKeys([$("tabShared"), $("tabPersonal")], tab => tab.click());
 
 /* ══════════ 轉動 ══════════ */
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -799,7 +879,7 @@ async function spin() {
   if (state.spinning || auth.busy || currentList.length === 0) return;
   if (!CONFIGURED) { openGate(); return; }
   if (!auth.user) { openGate(); return; }
-  if (activeGroup && !isMyGroupTurn()) { setHint("今天不是輪到你，等輪到你再轉吧 🍚", true); return; }
+  if (state.wheelMode !== "personal" && activeGroup && !isMyGroupTurn()) { setHint("今天不是輪到你，等輪到你再轉吧 🍚", true); return; }
   if (outOfSpins()) return;
 
   auth.busy = true;
@@ -882,7 +962,9 @@ async function recordSpinOutcome(winner, spinId) {
   } catch (e) {
     setHint("⚠️ 結果同步失敗，個人紀錄可能沒存到，請重新整理確認", true);
   }
-  if (activeGroup) {
+  // 個人轉盤轉出來的結果是私人的，不廣播給群組——不然會被誤當成「今天
+  // 全組吃的」貼到群組看板上。只有飯搭子轉盤本身的結果才廣播。
+  if (activeGroup && state.wheelMode === "shared") {
     try {
       const { error } = await supabase.rpc("record_group_result", {
         p_group_id: activeGroup.group_id, p_winner_name: winner.name, p_wheel_mode: state.wheelMode
@@ -1000,14 +1082,57 @@ function setOriginMsg(text, kind) {
   m.textContent = text;
   m.className = "origin-msg" + (kind ? " " + kind : "");
 }
+/* 出發點按鈕用 data-origin-key 統一同步選取樣式：內建的「基隆路一段200
+   號」「目前位置」兩顆在 index.html 就寫死 data-origin-key，使用者自己
+   新增的常用地標在 renderOriginTabs() 動態產生時補上 "preset:<id>"。
+   這樣不管有幾顆常用地標按鈕，同步邏輯都不用另外分支。 */
 function syncOriginTabs() {
-  const usingGps = !!customOrigin;
-  $("originDefaultBtn").classList.toggle("on", !usingGps);
-  $("originDefaultBtn").setAttribute("aria-selected", String(!usingGps));
-  $("originDefaultBtn").tabIndex = !usingGps ? 0 : -1;
-  $("originGpsBtn").classList.toggle("on", usingGps);
-  $("originGpsBtn").setAttribute("aria-selected", String(usingGps));
-  $("originGpsBtn").tabIndex = usingGps ? 0 : -1;
+  document.querySelectorAll('#originTabs .wheel-tab[role="tab"]').forEach(btn => {
+    const on = btn.dataset.originKey === currentOriginKey;
+    btn.classList.toggle("on", on);
+    btn.setAttribute("aria-selected", String(on));
+    btn.tabIndex = on ? 0 : -1;
+  });
+}
+/* 使用者自己的常用出發地標，動態插在「目前位置」按鈕前面（基隆路一段
+   200 號固定第一顆、目前位置固定最後一顆，「＋ 新增地標」再更後面）。 */
+let userOrigins = []; // [{id,name,lat,lng}]
+async function loadUserOrigins() {
+  try {
+    const { data, error } = await supabase
+      .from("user_origins").select("*").order("created_at", { ascending: true });
+    if (!error && Array.isArray(data)) userOrigins = data;
+  } catch (e) {}
+  renderOriginTabs();
+}
+function selectOrigin(key, latLng, name) {
+  customOrigin = latLng;
+  currentOriginKey = key;
+  syncOriginTabs();
+  setOriginMsg(
+    latLng
+      ? `已套用「${name}」，飯搭子轉盤／個人轉盤的走路時間都已重算（直線距離估算，非實際路線）`
+      : "飯搭子轉盤／個人轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）",
+    latLng ? "ok" : ""
+  );
+  recomputeCatsInData();
+  refresh();
+}
+function renderOriginTabs() {
+  document.querySelectorAll(".origin-preset-btn").forEach(el => el.remove());
+  const gpsBtn = $("originGpsBtn");
+  for (const o of userOrigins) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "wheel-tab origin-preset-btn";
+    btn.setAttribute("role", "tab");
+    btn.dataset.originKey = "preset:" + o.id;
+    btn.textContent = o.name;
+    btn.onclick = () => selectOrigin("preset:" + o.id, [o.lat, o.lng], o.name);
+    gpsBtn.parentNode.insertBefore(btn, gpsBtn);
+  }
+  syncOriginTabs();
+  bindTabArrowKeys([...document.querySelectorAll('#originTabs .wheel-tab[role="tab"]')], tab => tab.click());
 }
 /* 反查地址用 OpenStreetMap 的 Nominatim（免金鑰的免費服務），失敗就回 null，
    前端只顯示座標換算的結果、不會整個功能掛掉。 */
@@ -1026,11 +1151,8 @@ async function reverseGeocode(lat, lng) {
   }
 }
 $("originDefaultBtn").onclick = () => {
-  if (!customOrigin) return;
-  customOrigin = null;
-  syncOriginTabs();
-  setOriginMsg("預設轉盤／共享轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）", "");
-  refresh();
+  if (currentOriginKey === "default") return;
+  selectOrigin("default", null, "基隆路一段 200 號");
 };
 $("originGpsBtn").onclick = () => {
   if (!navigator.geolocation) { setOriginMsg("這個瀏覽器不支援定位功能", "err"); return; }
@@ -1039,19 +1161,17 @@ $("originGpsBtn").onclick = () => {
   navigator.geolocation.getCurrentPosition(
     async pos => {
       const thisOrigin = [pos.coords.latitude, pos.coords.longitude];
-      customOrigin = thisOrigin;
       $("originGpsBtn").disabled = false;
-      syncOriginTabs();
-      setOriginMsg("已套用目前位置，查詢地址中…（預設轉盤／共享轉盤的走路時間都已重算，直線距離估算，非實際路線）", "ok");
-      refresh();
+      selectOrigin("gps", thisOrigin, "目前位置");
+      setOriginMsg("已套用目前位置，查詢地址中…（飯搭子轉盤／個人轉盤的走路時間都已重算，直線距離估算，非實際路線）", "ok");
       const address = await reverseGeocode(thisOrigin[0], thisOrigin[1]);
-      // 查地址的這段時間，使用者可能已經切回預設出發點或重新定位過了——
+      // 查地址的這段時間，使用者可能已經切回別的出發點或重新定位過了——
       // customOrigin 這時已經不是同一個參照，代表這次查詢結果過期了，不要覆蓋畫面。
       if (customOrigin !== thisOrigin) return;
       setOriginMsg(
         address
-          ? `目前位置：${address}（預設轉盤／共享轉盤的走路時間都已重算，直線距離估算，非實際路線）`
-          : "已套用目前位置，預設轉盤／共享轉盤的走路時間都跟著重算（直線距離估算，非實際路線；地址查詢失敗）",
+          ? `目前位置：${address}（飯搭子轉盤／個人轉盤的走路時間都已重算，直線距離估算，非實際路線）`
+          : "已套用目前位置，飯搭子轉盤／個人轉盤的走路時間都跟著重算（直線距離估算，非實際路線；地址查詢失敗）",
         "ok"
       );
     },
@@ -1062,7 +1182,94 @@ $("originGpsBtn").onclick = () => {
     { enableHighAccuracy: false, timeout: 10000 }
   );
 };
-bindTabArrowKeys([$("originDefaultBtn"), $("originGpsBtn")], tab => tab.click());
+renderOriginTabs();
+
+/* ── 新增常用出發地標（貼 Google Maps 網址，跟新增地點共用同一套自動
+   帶入邏輯）── */
+let originAddParsedLatLng = null;
+function resetOriginAddForm() {
+  $("originAddUrl").value = "";
+  $("originAddQuickMsg").textContent = "";
+  $("originAddQuickMsg").className = "spot-quick-msg";
+  $("originAddName").value = "";
+  setOriginAddMsg("", "");
+  originAddParsedLatLng = null;
+}
+function setOriginAddMsg(text, kind) {
+  const m = $("originAddMsg");
+  m.textContent = text;
+  m.className = "spot-msg" + (kind ? " " + kind : "");
+}
+$("originAddBtn").onclick = () => {
+  if (!auth.user) { openGate(); return; }
+  resetOriginAddForm();
+  openVeil("originAddVeil");
+  $("originAddUrl").focus();
+};
+$("originAddCloseBtn").onclick = () => closeVeil("originAddVeil");
+$("originAddCancelBtn").onclick = () => closeVeil("originAddVeil");
+$("originAddVeil").onclick = e => { if (e.target === $("originAddVeil")) closeVeil("originAddVeil"); };
+$("originAddUrl").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("originAddAutoFillBtn").click(); } });
+$("originAddUrl").addEventListener("input", () => { originAddParsedLatLng = null; });
+
+$("originAddAutoFillBtn").onclick = async () => {
+  const url = $("originAddUrl").value.trim();
+  const msg = $("originAddQuickMsg");
+  if (!url) { msg.textContent = "先貼網址再按自動帶入"; msg.className = "spot-quick-msg err"; return; }
+  msg.textContent = "解析中…"; msg.className = "spot-quick-msg";
+  $("originAddAutoFillBtn").disabled = true;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/resolve-maps-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "apikey": SUPABASE_ANON_KEY },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (!data.ok) { msg.textContent = "網址解析失敗，麻煩手動填寫地標名稱"; msg.className = "spot-quick-msg err"; return; }
+    $("originAddUrl").value = data.resolvedUrl || url;
+    if (data.name && !$("originAddName").value.trim()) $("originAddName").value = data.name;
+    if (data.lat != null && data.lng != null) {
+      originAddParsedLatLng = [data.lat, data.lng];
+      msg.textContent = "已帶入座標／店名，確認地標名稱後送出";
+      msg.className = "spot-quick-msg ok";
+    } else {
+      originAddParsedLatLng = null;
+      msg.textContent = "這個網址抓不到座標，沒辦法拿來當出發點，麻煩換一個網址";
+      msg.className = "spot-quick-msg err";
+    }
+  } catch (e) {
+    msg.textContent = "連線發生問題，麻煩稍後再試";
+    msg.className = "spot-quick-msg err";
+  } finally {
+    $("originAddAutoFillBtn").disabled = false;
+  }
+};
+$("originAddSubmitBtn").onclick = async () => {
+  if (!auth.user) { openGate(); return; }
+  const name = $("originAddName").value.trim();
+  const latLng = originAddParsedLatLng;
+  if (!name) { setOriginAddMsg("請填地標名稱", "err"); return; }
+  if (!latLng) { setOriginAddMsg("請先貼網址並按自動帶入取得座標", "err"); return; }
+  $("originAddSubmitBtn").disabled = true;
+  setOriginAddMsg("新增中…", "");
+  try {
+    const { data, error } = await supabase.from("user_origins")
+      .insert({ user_id: auth.user.id, name, lat: latLng[0], lng: latLng[1] })
+      .select().single();
+    if (error) { setOriginAddMsg("新增失敗：" + error.message, "err"); return; }
+    userOrigins.push(data);
+    renderOriginTabs();
+    selectOrigin("preset:" + data.id, [data.lat, data.lng], data.name);
+    setOriginAddMsg("新增成功！", "ok");
+    setTimeout(() => closeVeil("originAddVeil"), 700);
+  } catch (e) {
+    setOriginAddMsg("連線發生問題，請稍後再試", "err");
+  } finally {
+    $("originAddSubmitBtn").disabled = false;
+  }
+};
 $("spinBtn").onclick = spin;
 $("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
 $("rShareBtn").onclick = () => {
@@ -1072,7 +1279,7 @@ $("rShareBtn").onclick = () => {
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { hideResult(); closeVeil("groupResultVeil"); closeBonusModal(); closeSpotModal(); closeProfileModal(); closeGroupsModal(); closeUserMenu(); }
+  if (e.key === "Escape") { hideResult(); closeVeil("groupResultVeil"); closeBonusModal(); closeSpotModal(); closeVeil("originAddVeil"); closeProfileModal(); closeGroupsModal(); closeUserMenu(); }
   if (e.code === "Space"
       && openModalCount === 0
       && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement?.tagName || "")) {
@@ -1198,7 +1405,12 @@ $("bonusVeil").onclick = e => { if (e.target === $("bonusVeil")) closeBonusModal
 $("spotCat").innerHTML = CAT_ORDER.map(c => `<option value="${c}">${CAT_EMOJI[c] || ""} ${c}</option>`).join("");
 
 let spotParsedLatLng = null; // 自動帶入解析到的經緯度，跟著表單一起送出
-let editingSpotId = null;    // null＝新增模式；有值＝正在編輯這筆 shared_spots.id
+let editingSpotId = null;    // null＝新增模式；有值＝正在編輯這筆 shared_spots/personal_spots 的 id
+/* 開窗當下的 state.wheelMode（"shared"／"personal"），決定送出時要寫
+   哪一張表；跟 editingSpotId 一樣在開窗當下（resetSpotForm）鎖定，
+   不要在送出時才讀 state.wheelMode——彈窗開著的時候使用者切不了分頁，
+   但這樣寫法上更直接對應「這筆資料屬於哪個清單」。 */
+let spotFormMode = "shared";
 /* 每次開窗（resetSpotForm）遞增。送出當下記住這個值，非同步回呼比對
    還是不是同一次開窗，避免慢回應在使用者已經切去填另一張新表單時，
    還把它清空／強制關窗（issue #003）。 */
@@ -1207,8 +1419,9 @@ let spotFormToken = 0;
 function openSpotModal() {
   if (!auth.user) { openGate(); return; }
   resetSpotForm();
-  $("spotTitle").textContent = "新增地點到共享清單";
-  $("spotSubmitBtn").textContent = "新增到共享清單";
+  const toPersonal = spotFormMode === "personal";
+  $("spotTitle").textContent = toPersonal ? "新增地點到個人清單" : "新增地點到共享清單";
+  $("spotSubmitBtn").textContent = toPersonal ? "新增到個人清單" : "新增到共享清單";
   openVeil("spotVeil");
   $("spotName").focus();
 }
@@ -1234,6 +1447,7 @@ function closeSpotModal() {
 function resetSpotForm() {
   spotFormToken++;
   editingSpotId = null;
+  spotFormMode = state.wheelMode === "personal" ? "personal" : "shared";
   $("spotQuickUrl").value = "";
   $("spotQuickMsg").textContent = "";
   $("spotQuickMsg").className = "spot-quick-msg";
@@ -1264,6 +1478,7 @@ function estimateWalkMinutes(lat, lng, origin = ORIGIN_LL) {
 }
 
 $("addSpotBtn").onclick = openSpotModal;
+$("groupGateBtn").onclick = openGroupsModal;
 $("spotCloseBtn").onclick = closeSpotModal;
 $("spotCancelBtn").onclick = closeSpotModal;
 $("spotVeil").onclick = e => { if (e.target === $("spotVeil")) closeSpotModal(); };
@@ -1313,22 +1528,15 @@ $("spotAutoFillBtn").onclick = async () => {
   }
 };
 
-/* 樂觀更新：本機的 sharedSpots 陣列先改掉、畫面立刻反映，
-   不用等 Realtime 事件繞一圈回來（其他使用者那邊還是靠 Realtime 同步）。 */
-function patchLocalSharedSpot(id, patch) {
-  const i = sharedSpots.findIndex(s => s.id === id);
-  if (i === -1) return;
-  sharedSpots[i] = { ...sharedSpots[i], ...patch };
-  recomputeCatsInData();
-  refresh();
-}
-
 $("spotSubmitBtn").onclick = async () => {
   if (!auth.user) { openGate(); return; }
   // 全部在任何 await 之前先讀出來、鎖定這次送出對應的表單狀態，
   // 不要在非同步回呼裡才讀取可能已經被使用者切走的全域變數（issue #003）。
   const myToken = spotFormToken;
   const submittingId = editingSpotId;
+  const mode = spotFormMode;
+  const table = mode === "personal" ? "personal_spots" : "shared_spots";
+  const list = mode === "personal" ? personalSpots : sharedSpots;
   const name = $("spotName").value.trim();
   const cat = $("spotCat").value;
   const priceMin = Math.max(0, Math.round(+$("spotPriceMin").value || 0));
@@ -1338,6 +1546,7 @@ $("spotSubmitBtn").onclick = async () => {
   const latLng = spotParsedLatLng;
 
   if (!name) { setSpotMsg("請填店名", "err"); return; }
+  if (mode === "shared" && !activeGroup) { setSpotMsg("請先選擇一個飯搭子圈", "err"); return; }
 
   $("spotSubmitBtn").disabled = true;
   setSpotMsg(submittingId ? "儲存中…" : "送出中…", "");
@@ -1346,17 +1555,34 @@ $("spotSubmitBtn").onclick = async () => {
     if (latLng) { payload.lat = latLng[0]; payload.lng = latLng[1]; }
 
     if (submittingId) {
-      const { error } = await supabase.from("shared_spots").update(payload).eq("id", submittingId);
+      const { error } = await supabase.from(table).update(payload).eq("id", submittingId);
       if (error) { if (myToken === spotFormToken) setSpotMsg("儲存失敗：" + error.message, "err"); return; }
-      patchLocalSharedSpot(submittingId, {
-        name, cat, price: [priceMin, priceMax], walk, mapsUrl,
-        ll: latLng || sharedSpots.find(s => s.id === submittingId)?.ll || null
-      });
+      // 樂觀更新：本機清單先改掉、畫面立刻反映，不用等 Realtime 事件
+      // 繞一圈回來（其他使用者那邊還是靠 Realtime 同步）。
+      const i = list.findIndex(s => s.id === submittingId);
+      if (i !== -1) {
+        list[i] = {
+          ...list[i], name, cat, price: [priceMin, priceMax], walk, mapsUrl,
+          ll: latLng || list[i].ll || null
+        };
+        recomputeCatsInData();
+        refresh();
+      }
       if (myToken === spotFormToken) setSpotMsg("已儲存變更！", "ok");
     } else {
-      payload.created_by = auth.user.id;
-      const { error } = await supabase.from("shared_spots").insert(payload);
+      if (mode === "personal") payload.user_id = auth.user.id;
+      else { payload.group_id = activeGroup.group_id; payload.created_by = auth.user.id; }
+      const { data, error } = await supabase.from(table).insert(payload).select().single();
       if (error) { if (myToken === spotFormToken) setSpotMsg("新增失敗：" + error.message, "err"); return; }
+      // 樂觀更新：新增的這筆立刻塞進本機清單，不要完全依賴 Realtime 推播
+      // 回來才看得到（Realtime 有延遲甚至掉線的話，剛新增的人反而看不到
+      // 自己剛加的地點）。防呆避免 Realtime 事件後腳也到造成重複塞入。
+      if (!list.some(s => s.id === data.id)) {
+        list.push(mapSharedRow(data));
+        if (mode === "personal") updatePersonalCountBadge(); else updateSharedCountBadge();
+        recomputeCatsInData();
+        refresh();
+      }
       if (myToken === spotFormToken) setSpotMsg("新增成功！", "ok");
     }
     // 使用者送出後又重新開過窗（token 對不上），這裡就不要再去清空／
@@ -1419,7 +1645,7 @@ async function loadSpinHistory() {
     box.innerHTML = data.map(r => {
       const d = new Date(r.spun_at);
       const dateStr = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-      const modeTag = r.wheel_mode === "shared" ? "共享" : "預設";
+      const modeTag = r.wheel_mode === "personal" ? "個人" : r.wheel_mode === "shared" ? "飯搭子" : "預設";
       return `<div class="profile-history-row"><span class="h-date">${dateStr}・${modeTag}</span><span class="h-name">${escapeHtml(r.winner_name)}</span></div>`;
     }).join("");
   } catch (e) {
@@ -1486,6 +1712,7 @@ $("profileSaveBtn").onclick = async () => {
 
 /* ══════════ 飯搭子圈 ══════════ */
 let myGroups = [];
+let myGroupsLoaded = false; // my_groups() 第一次回來之前，不要誤判「還沒加入任何飯搭子圈」
 let allGroups = [];   // joinable_groups() 回傳：目前系統裡「我還沒加入」的群組，給探索列表用
 let currentGroupDetail = null;   // group_status() 的完整回傳，對應目前開著的詳細頁（純顯示用，可能是任何一個群組）
 let activeGroup = null;          // { group_id, name }：目前綁定在轉盤上的群組（null＝個人模式）
@@ -1502,6 +1729,36 @@ let groupAutoActivateDone = false;
 function isMyGroupTurn() {
   return !!(activeGroup && activeGroupDetail &&
     activeGroupDetail.group_id === activeGroup.group_id && activeGroupDetail.is_daily_spinner);
+}
+
+/* 飯搭子轉盤分頁的守門畫面：完全沒加入任何飯搭子圈時，把轉盤換成「先
+   加入/建立一個飯搭子圈」的提示，不要讓使用者對著一份永遠是空的清單
+   發呆。myGroupsLoaded 還沒回來之前（剛登入那一瞬間）先不判斷，避免
+   閃一下「還沒加入」又馬上被蓋掉。 */
+function syncGroupWheelUI() {
+  const showGate = state.wheelMode === "shared" && !!auth.user && !activeGroup && myGroupsLoaded && myGroups.length === 0;
+  $("groupGate").hidden = !showGate;
+  $("stage").hidden = showGate;
+  $("wheelMeta").hidden = showGate;
+  $("rosterDetails").hidden = showGate;
+  $("addSpotBtn").hidden = state.wheelMode === "default" || showGate;
+
+  const showSwitcher = state.wheelMode === "shared" && myGroups.length > 1;
+  const switcherBox = $("groupWheelSwitcher");
+  switcherBox.hidden = !showSwitcher;
+  if (showSwitcher) {
+    switcherBox.innerHTML = "";
+    for (const g of myGroups) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const isOn = !!(activeGroup && activeGroup.group_id === g.group_id);
+      btn.className = "group-switch-pill" + (isOn ? " on" : "");
+      btn.setAttribute("aria-pressed", String(isOn));
+      btn.textContent = g.name;
+      btn.onclick = () => { if (!isOn) activateGroup(g.group_id, g.name); };
+      switcherBox.appendChild(btn);
+    }
+  }
 }
 
 function openGroupsModal() {
@@ -1536,7 +1793,9 @@ async function loadMyGroups() {
     const { data, error } = await supabase.rpc("my_groups");
     if (!error && Array.isArray(data)) myGroups = data;
   } catch (e) {}
+  myGroupsLoaded = true;
   renderGroupList();
+  refresh();
 }
 
 function renderGroupList() {
@@ -1768,7 +2027,7 @@ function renderGroupResult(data) {
   const box = $("groupDetailResult");
   if (!data.today_result) { box.hidden = true; box.onclick = null; return; }
   box.hidden = false;
-  const modeTag = data.today_result.wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
+  const modeTag = data.today_result.wheel_mode === "shared" ? "飯搭子轉盤" : "預設轉盤";
   box.innerHTML = `🎉 今天大家跟著吃這個：<b>${escapeHtml(data.today_result.winner_name)}</b>（${modeTag}）<span class="result-hint">詳情 ›</span>`;
   box.onclick = () => openGroupResultDetail(data);
 }
@@ -1817,6 +2076,7 @@ $("groupUseWheelBtn").onclick = () => {
   activeGroup = { group_id: currentGroupDetail.group_id, name: g ? g.name : "飯搭子圈" };
   activeGroupDetail = currentGroupDetail;
   groupBannerExpanded = false;
+  switchGroupSpots(activeGroup.group_id);
   updateGroupUseWheelBtn();
   closeGroupsModal();
   syncGroupBanner();
@@ -1827,6 +2087,7 @@ function leaveGroupMode() {
   activeGroup = null;
   activeGroupDetail = null;
   groupBannerExpanded = false;
+  switchGroupSpots(null);
   syncGroupBanner();
   refresh();
 }
@@ -1868,7 +2129,7 @@ function syncGroupBanner() {
   const resultEl = $("groupBannerResult");
   if (d && d.today_result) {
     resultEl.hidden = false;
-    const modeTag = d.today_result.wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
+    const modeTag = d.today_result.wheel_mode === "shared" ? "飯搭子轉盤" : "預設轉盤";
     resultEl.innerHTML = `🎉 今天吃：<b>${escapeHtml(d.today_result.winner_name)}</b>（${modeTag}）<span class="result-hint">詳情 ›</span>`;
     resultEl.onclick = () => openGroupResultDetail(d);
   } else {
@@ -1890,7 +2151,7 @@ function openGroupResultDetail(detail) {
   currentGroupResultName = winner_name;
   const list = wheel_mode === "shared" ? sharedSpots : RESTAURANTS;
   const r = list.find(x => x.name === winner_name) || null;
-  const modeTag = wheel_mode === "shared" ? "共享轉盤" : "預設轉盤";
+  const modeTag = wheel_mode === "shared" ? "飯搭子轉盤" : "預設轉盤";
 
   $("groupResultTitle").textContent = winner_name;
   if (r) {
@@ -1943,6 +2204,8 @@ async function refreshActiveGroupStatus() {
       // 因此誤放行一次其實不該發生的轉盤（issue #004）。
       activeGroup = null;
       activeGroupDetail = null;
+      switchGroupSpots(null);
+      if (state.wheelMode !== "personal") { state.wheelMode = "personal"; syncWheelModeUI(); }
       setHint("你已經不在這個群組了，已切回個人轉盤", true);
     }
   } catch (e) {}
@@ -1955,6 +2218,7 @@ async function refreshActiveGroupStatus() {
 async function activateGroup(groupId, name) {
   activeGroup = { group_id: groupId, name };
   groupBannerExpanded = false;
+  switchGroupSpots(groupId);
   await refreshActiveGroupStatus();
 }
 
@@ -1968,9 +2232,11 @@ async function autoActivateGroupOnLogin() {
     const { data, error } = await supabase.rpc("my_groups");
     if (!error && Array.isArray(data)) myGroups = data;
   } catch (e) {}
-  if (activeGroup || myGroups.length === 0) return;
+  myGroupsLoaded = true;
+  if (activeGroup || myGroups.length === 0) { refresh(); return; }
   const g = myGroups[0];
   activeGroup = { group_id: g.group_id, name: g.name };
+  switchGroupSpots(g.group_id);
   await refreshActiveGroupStatus();
 }
 
@@ -2012,13 +2278,16 @@ async function applySession(session) {
     $("authBar").hidden = false;
     updateWhoDisplay();
     await fetchStatus();
-    loadSharedSpots();
-    subscribeSharedSpots();
+    loadPersonalSpots();
+    subscribePersonalSpots();
+    loadUserOrigins();
     loadMyProfile();
     subscribeGroupResults();
     if (!groupAutoActivateDone) {
       groupAutoActivateDone = true;
       autoActivateGroupOnLogin();
+    } else if (activeGroup) {
+      switchGroupSpots(activeGroup.group_id);
     }
   } else {
     auth.remaining = null;
@@ -2029,10 +2298,17 @@ async function applySession(session) {
     currentGroupDetail = null;
     activeGroupDetail = null;
     groupAutoActivateDone = false;
+    myGroups = [];
+    myGroupsLoaded = false;
+    groupSpotsGroupId = null;
+    sharedSpots = [];
+    personalSpots = [];
+    userOrigins = [];
     // 登出後沒人在看畫面了，訂閱還留著只是白白一直收 Realtime 事件、
     // 觸發不必要的重繪（issue #023）；下次登入 subscribeSharedSpots()／
     // subscribeGroupResults() 的「已有訂閱就 return」防呆會自然重建。
     if (sharedChannel) { supabase.removeChannel(sharedChannel); sharedChannel = null; }
+    if (personalChannel) { supabase.removeChannel(personalChannel); personalChannel = null; }
     if (groupResultChannel) { supabase.removeChannel(groupResultChannel); groupResultChannel = null; }
     syncGroupBanner();
     updateQuota();
