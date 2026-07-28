@@ -46,6 +46,14 @@ self.addEventListener("fetch", event => {
         caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
         return res;
       })
-      .catch(() => caches.match(req).then(cached => cached || caches.match("./index.html")))
+      .catch(() => caches.match(req).then(cached => {
+        if (cached) return cached;
+        // 離線且這個資源本身也沒被快取過：只有「頁面導覽」（req.mode ===
+        // "navigate"，例如重新整理、直接輸入網址）才適合退回 index.html
+        // 當作 app shell；CSS／圖片這類子資源退回 index.html 只會拿到
+        // 一份 HTML 冒充成 CSS/圖片，瀏覽器套用/顯示都會出錯，不如讓它
+        // 照原本的方式回報「拿不到」（issue #015）。
+        return req.mode === "navigate" ? caches.match("./index.html") : undefined;
+      }))
   );
 });

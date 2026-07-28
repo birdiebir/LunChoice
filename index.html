@@ -62,7 +62,7 @@
         <div class="group-banner-detail" id="groupBannerDetail" hidden>
           <div class="group-banner-head">
             <span class="group-banner-title">🍚 飯搭子圈：<span id="groupBannerName"></span></span>
-            <button class="group-banner-leave" id="groupBannerLeave" type="button">離開群組模式</button>
+            <button class="group-banner-leave" id="groupBannerLeave" type="button">先切回自己轉</button>
           </div>
           <div class="group-banner-turn" id="groupBannerTurn" aria-live="polite"></div>
           <button type="button" class="group-banner-result" id="groupBannerResult" hidden aria-live="polite"></button>
@@ -74,7 +74,7 @@
         <button class="btn btn-go" id="groupGateBtn" type="button">建立或加入飯搭子圈</button>
       </div>
       <div class="wheel-meta" id="wheelMeta">
-        <div class="match-count">當前篩選 <b id="count">0</b> 家</div>
+        <div class="match-count">目前篩出 <b id="count">0</b> 家</div>
         <span class="quota-badge" id="quotaBadge" hidden></span>
       </div>
       <div class="wheel-stage" id="stage">
@@ -108,7 +108,7 @@
           <button class="wheel-tab" id="originGpsBtn" type="button" role="tab" aria-selected="false" data-origin-key="gps">目前位置</button>
           <button class="origin-add-btn" id="originAddBtn" type="button">＋ 新增地標</button>
         </div>
-        <div class="origin-msg" id="originMsg" role="status" aria-live="polite">飯搭子轉盤／個人轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）</div>
+        <div class="origin-msg" id="originMsg" role="status" aria-live="polite">走路時間會跟著出發點重算（直線距離估算，非實際路線）</div>
       </div>
 
       <div class="field">
@@ -134,7 +134,16 @@
 
   <details class="roster" id="rosterDetails">
     <summary>看看今天名單裡有哪些店 ▾</summary>
+    <div class="roster-msg" id="rosterMsg" role="status" aria-live="polite"></div>
     <div class="roster-grid" id="roster"></div>
+  </details>
+
+  <details class="roster deleted-roster" id="deletedRosterDetails" hidden>
+    <summary>被刪除的店，還能復原 ▾<span class="deleted-roster-count" id="deletedRosterCount" hidden>0</span></summary>
+    <div class="roster-msg" id="deletedRosterMsg" role="status" aria-live="polite"></div>
+    <div class="roster-grid" id="deletedRoster">
+      <div class="deleted-roster-empty" id="deletedRosterEmpty">目前沒有被刪除的店</div>
+    </div>
   </details>
 </div>
 
@@ -311,7 +320,7 @@
       <h2 id="groupsTitle">飯搭子圈</h2>
       <div class="group-create-row">
         <label class="sr-only" for="groupNameInput">新群組名稱</label>
-        <input type="text" id="groupNameInput" maxlength="60" placeholder="新群組名稱…">
+        <input type="text" id="groupNameInput" maxlength="60" placeholder="新圈子的名字…">
         <button class="btn btn-go" id="groupCreateBtn" type="button">＋ 建立</button>
       </div>
       <div class="groups-msg" id="groupListMsg" role="status" aria-live="polite"></div>
@@ -342,7 +351,7 @@
 
       <div class="group-member-list" id="groupMemberList"></div>
 
-      <button class="btn btn-go" id="groupUseWheelBtn" type="button">用這個群組轉盤</button>
+      <button class="btn btn-go" id="groupUseWheelBtn" type="button">用這個圈轉盤</button>
       <button type="button" class="group-leave-btn" id="groupLeaveBtn">退出這個飯搭子圈</button>
     </div>
   </div>

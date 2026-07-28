@@ -493,8 +493,10 @@ function persist() {
 }
 
 /* ══════════ 飯搭子轉盤／個人轉盤：資料來源 ══════════ */
-let sharedSpots = [];   // 目前選定的飯搭子圈的共享清單
-let personalSpots = []; // 目前登入者的個人清單
+let sharedSpots = [];   // 目前選定的飯搭子圈的共享清單（不含已刪除）
+let personalSpots = []; // 目前登入者的個人清單（不含已刪除）
+let deletedSharedSpots = [];   // 同一個飯搭子圈裡被刪除、還能復原的地點
+let deletedPersonalSpots = []; // 個人清單裡被刪除、還能復原的地點
 
 function activeList() {
   if (state.wheelMode === "personal") return personalSpots;
@@ -634,9 +636,9 @@ function refresh() {
   $("stage").classList.toggle("empty", currentList.length === 0);
   $("emptyNote").innerHTML =
     (state.wheelMode === "shared" && sharedSpots.length === 0)
-      ? (sharedSpotsLoadFailed ? "飯搭子圈清單載入失敗 😥<br>請重新整理再試一次" : "飯搭子圈清單還是空的 🌱<br>來新增第一家吧")
+      ? (sharedSpotsLoadFailed ? "飯搭子圈清單載入失敗 😥<br>重新整理一下再試" : "飯搭子圈清單還是空的 🌱<br>來新增第一家吧")
     : (state.wheelMode === "personal" && personalSpots.length === 0)
-      ? (personalSpotsLoadFailed ? "個人清單載入失敗 😥<br>請重新整理再試一次" : "個人清單還是空的 🌱<br>來新增第一家吧")
+      ? (personalSpotsLoadFailed ? "個人清單載入失敗 😥<br>重新整理一下再試" : "個人清單還是空的 🌱<br>來新增第一家吧")
     : "沒有符合條件的店 😥<br>放寬一點預算或走路時間吧";
   $("spinBtn").disabled =
     currentList.length === 0 || state.spinning || auth.busy || !auth.user || outOfSpins() ||
@@ -646,7 +648,12 @@ function refresh() {
   $("wheel").setAttribute("aria-label", `午餐轉輪，目前 ${currentList.length} 家候選`);
   drawWheel(currentList);
   renderChips();
-  renderRoster();
+  // 名單摺疊區塊預設是收合的，收合時完全沒必要重建整個 roster 的 DOM——
+  // 拖預算／走路時間滑桿時 refresh() 每個 input 事件都會跑一次，展開的
+  // renderRoster() 要重建全部卡片，手機上拖滑桿會明顯卡頓。收合時跳過，
+  // 使用者展開的當下（見下面 toggle 監聽）再補畫一次最新的（issue #011）。
+  if ($("rosterDetails").open) renderRoster();
+  if ($("deletedRosterDetails").open) renderDeletedRoster(); else updateDeletedRosterBadge();
   persist();
 }
 
@@ -677,18 +684,25 @@ function renderRoster() {
   box.innerHTML = "";
   /* 走路時間滑桿最多只能設到 10 分鐘，用自己目前位置重新估算出來的
      走路時間如果直接超過這個上限，代表不管怎麼調滑桿都不會落在篩選
-     範圍內，乾脆整列不顯示，而不是跟預算／類別沒過濾到一樣只是變灰。 */
+     範圍內，乾脆整列不顯示，而不是跟預算／類別沒過濾到一樣只是變灰。
+     但被藏掉的筆數要在名單尾端交代一句——不然使用者自己新增的地點
+     只要走路時間填超過 10 分鐘，就會「新增成功卻到處都找不到」（issue #005）。 */
   const maxWalk = +$("walk").max;
-  const sorted = [...activeList()]
+  const fullList = activeList();
+  const sorted = [...fullList]
     .filter(r => walkMinutesFor(r) <= maxWalk)
     .sort((a, b) => walkMinutesFor(a) - walkMinutesFor(b) || avg(a) - avg(b));
+  const canEdit = state.wheelMode === "shared" || state.wheelMode === "personal";
   for (const r of sorted) {
     const inFilter = avg(r) <= state.budget && walkMinutesFor(r) <= state.walk && state.cats.has(r.cat);
     const div = document.createElement("div");
-    div.className = "r-row" + (!inFilter ? " skipped" : "");
+    div.className = "r-row" + (!inFilter ? " skipped" : "") + (canEdit ? " has-actions" : "");
     div.dataset.name = r.name;
     div.innerHTML = `
-      ${(state.wheelMode === "shared" || state.wheelMode === "personal") ? '<button class="r-edit-btn" type="button" aria-label="編輯這筆資料">✎</button>' : ""}
+      ${canEdit ? `<div class="r-row-actions">
+        <button class="r-edit-btn" type="button" aria-label="編輯這筆資料">✎</button>
+        <button class="r-delete-btn" type="button" aria-label="刪除這筆資料">🗑</button>
+      </div>` : ""}
       <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span></div>
       <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${walkMinutesFor(r)} 分</span><span>${escapeHtml(r.addr)}</span></div>
       ${r.note ? `<div class="r-note">${escapeHtml(r.note)}</div>` : ""}
@@ -698,9 +712,153 @@ function renderRoster() {
       editBtn.onclick = () => openEditSpotModal(r);
       if (r.name === focusedName) editBtn.focus();
     }
+    const deleteBtn = div.querySelector(".r-delete-btn");
+    if (deleteBtn) deleteBtn.onclick = () => armOrDeleteSpot(deleteBtn, r);
+    box.appendChild(div);
+  }
+  const hiddenCount = fullList.length - sorted.length;
+  if (hiddenCount > 0) {
+    const note = document.createElement("div");
+    note.className = "roster-note";
+    note.textContent = `另有 ${hiddenCount} 家走路時間超過 ${maxWalk} 分鐘上限，以目前的出發點不會出現在名單和轉盤上（換個出發點可能就會回來）`;
+    box.appendChild(note);
+  }
+}
+/* refresh() 收合時會跳過 renderRoster()（見上面 issue #011 的註解），
+   使用者展開這個摺疊區塊的當下要補畫一次，不然展開看到的是收合前
+   那份可能已經過期的名單。 */
+$("rosterDetails").addEventListener("toggle", () => { if ($("rosterDetails").open) renderRoster(); });
+
+/* 刪除要點兩次：第一次把 🗑 換成「確定刪除？」，2.5 秒內再點一次才真的
+   送出（沿用專案裡「移出圈子／退出圈子」的二次確認風格，不用瀏覽器
+   confirm() 彈窗）。刪除是軟刪除（寫 deleted_at），飯搭子圈或個人清單
+   都能在下面的「被刪除的店」區塊復原，所以這裡不用太緊張，但手滑刪掉
+   共享清單的店還是會讓其他人瞬間看不到，兩次確認比較保險。 */
+function armOrDeleteSpot(btn, spot) {
+  if (btn.dataset.armed === "1") {
+    deleteSpot(spot, btn);
+    return;
+  }
+  btn.dataset.armed = "1";
+  btn.textContent = "確定刪除？";
+  btn.setAttribute("aria-label", `確定要刪除「${spot.name}」嗎？`);
+  btn.classList.add("confirm");
+  setTimeout(() => {
+    if (btn.isConnected) {
+      btn.dataset.armed = "0";
+      btn.textContent = "🗑";
+      btn.setAttribute("aria-label", "刪除這筆資料");
+      btn.classList.remove("confirm");
+    }
+  }, 2500);
+}
+
+function setRosterMsg(id, text, kind) {
+  const m = $(id);
+  m.textContent = text;
+  m.className = "roster-msg" + (kind ? " " + kind : "");
+}
+
+async function deleteSpot(spot, btn) {
+  if (!auth.user) { openGate(); return; }
+  const mode = state.wheelMode === "personal" ? "personal" : "shared";
+  const table = mode === "personal" ? "personal_spots" : "shared_spots";
+  if (btn) btn.disabled = true;
+  try {
+    const deletedAt = new Date().toISOString();
+    const { error } = await supabase.from(table)
+      .update({ deleted_at: deletedAt, deleted_by: auth.user.id }).eq("id", spot.id);
+    if (error) {
+      setRosterMsg("rosterMsg", "刪除失敗，等一下再試試", "err");
+      if (btn) btn.disabled = false;
+      return;
+    }
+    // 樂觀更新：本機清單先把這筆從「目前」搬到「已刪除」，不用等 Realtime
+    // 事件繞一圈回來（跟新增/編輯地點是同一套樂觀更新邏輯）。
+    const list = mode === "personal" ? personalSpots : sharedSpots;
+    const deletedList = mode === "personal" ? deletedPersonalSpots : deletedSharedSpots;
+    const i = list.findIndex(s => s.id === spot.id);
+    if (i !== -1) {
+      const [removed] = list.splice(i, 1);
+      if (!deletedList.some(s => s.id === spot.id)) {
+        deletedList.push({ ...removed, deletedAt, deletedBy: auth.user.id });
+      }
+    }
+    if (mode === "personal") updatePersonalCountBadge(); else updateSharedCountBadge();
+    recomputeCatsInData();
+    refresh();
+    setRosterMsg("rosterMsg", `已刪除：${spot.name}，可以到下面「被刪除的店」復原`, "ok");
+    announce(`已刪除：${spot.name}，可以到下面「被刪除的店」復原`);
+  } catch (e) {
+    setRosterMsg("rosterMsg", "網路好像卡住了，等一下再試試", "err");
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function restoreSpot(spot, mode, btn) {
+  if (!auth.user) { openGate(); return; }
+  const table = mode === "personal" ? "personal_spots" : "shared_spots";
+  if (btn) btn.disabled = true;
+  try {
+    const { error } = await supabase.from(table)
+      .update({ deleted_at: null, deleted_by: null }).eq("id", spot.id);
+    if (error) {
+      setRosterMsg("deletedRosterMsg", "復原失敗，等一下再試試", "err");
+      if (btn) btn.disabled = false;
+      return;
+    }
+    const list = mode === "personal" ? personalSpots : sharedSpots;
+    const deletedList = mode === "personal" ? deletedPersonalSpots : deletedSharedSpots;
+    const i = deletedList.findIndex(s => s.id === spot.id);
+    if (i !== -1) deletedList.splice(i, 1);
+    if (!list.some(s => s.id === spot.id)) list.push({ ...spot, deletedAt: null, deletedBy: null });
+    if (mode === "personal") updatePersonalCountBadge(); else updateSharedCountBadge();
+    recomputeCatsInData();
+    refresh();
+    setRosterMsg("deletedRosterMsg", `已復原：${spot.name}`, "ok");
+    announce(`已復原：${spot.name}`);
+  } catch (e) {
+    setRosterMsg("deletedRosterMsg", "網路好像卡住了，等一下再試試", "err");
+    if (btn) btn.disabled = false;
+  }
+}
+
+function updateDeletedRosterBadge() {
+  const list = state.wheelMode === "personal" ? deletedPersonalSpots : deletedSharedSpots;
+  const badge = $("deletedRosterCount");
+  badge.hidden = list.length === 0;
+  badge.textContent = list.length;
+}
+
+function renderDeletedRoster() {
+  updateDeletedRosterBadge();
+  const mode = state.wheelMode === "personal" ? "personal" : "shared";
+  const list = mode === "personal" ? deletedPersonalSpots : deletedSharedSpots;
+  const box = $("deletedRoster");
+  box.innerHTML = "";
+  if (list.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "deleted-roster-empty";
+    empty.id = "deletedRosterEmpty";
+    empty.textContent = "目前沒有被刪除的店";
+    box.appendChild(empty);
+    return;
+  }
+  for (const r of list) {
+    const div = document.createElement("div");
+    div.className = "r-row deleted-row";
+    div.dataset.name = r.name;
+    div.innerHTML = `
+      <button class="r-restore-btn" type="button" aria-label="復原這筆資料">↺ 復原</button>
+      <div class="r-name"><span>${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.name)}</span></div>
+      <div class="r-meta"><span>NT$${r.price[0]}–${r.price[1]}</span><span>🚶 ${r.walk} 分</span><span>${escapeHtml(r.addr)}</span></div>`;
+    div.querySelector(".r-restore-btn").onclick = e => restoreSpot(r, mode, e.currentTarget);
     box.appendChild(div);
   }
 }
+/* 跟 rosterDetails 一樣：收合時不用重建 DOM，展開當下（或資料變動時，見
+   deleteSpot／restoreSpot／loadSharedSpots 等）才補畫一次最新的名單。 */
+$("deletedRosterDetails").addEventListener("toggle", () => { if ($("deletedRosterDetails").open) renderDeletedRoster(); });
 
 /* ══════════ 飯搭子轉盤：切換群組、載入、即時同步 ══════════ */
 function mapSharedRow(row) {
@@ -713,7 +871,9 @@ function mapSharedRow(row) {
     addr: row.addr || "",
     note: row.note || "",
     ll: (row.lat != null && row.lng != null) ? [row.lat, row.lng] : null,
-    mapsUrl: row.maps_url || ""
+    mapsUrl: row.maps_url || "",
+    deletedAt: row.deleted_at || null,
+    deletedBy: row.deleted_by || null
   };
 }
 
@@ -732,7 +892,11 @@ async function loadSharedSpots(groupId) {
     const { data, error } = await supabase
       .from("shared_spots").select("*").eq("group_id", groupId).order("created_at", { ascending: true });
     if (error) throw error;
-    sharedSpots = data.map(mapSharedRow);
+    // 這裡故意不加 deleted_at 篩選，一次把「目前」跟「已刪除」都撈回來，
+    // 在本機依 deleted_at 分成兩份陣列——不然復原區塊得再開一次連線查詢。
+    const rows = data.map(mapSharedRow);
+    sharedSpots = rows.filter(r => !r.deletedAt);
+    deletedSharedSpots = rows.filter(r => r.deletedAt);
     sharedSpotsLoadFailed = false;
   } catch (e) {
     sharedSpotsLoadFailed = true;
@@ -757,11 +921,21 @@ function subscribeSharedSpots(groupId) {
       if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "shared_spots", filter: "group_id=eq." + groupId }, payload => {
-      // 別人編輯了共享地點：同步更新本機資料，讓大家的畫面即時一致
-      const i = sharedSpots.findIndex(s => s.id === payload.new.id);
-      if (i === -1) return;
-      sharedSpots[i] = mapSharedRow(payload.new);
-      announce(`飯搭子圈清單更新了：${payload.new.name}`);
+      // 別人編輯／刪除／復原了共享地點：同步更新本機資料，讓大家的畫面
+      // 即時一致。deleted_at 有沒有值決定這筆該待在「目前」還是「已刪除」。
+      const updated = mapSharedRow(payload.new);
+      const activeIdx = sharedSpots.findIndex(s => s.id === updated.id);
+      const deletedIdx = deletedSharedSpots.findIndex(s => s.id === updated.id);
+      if (updated.deletedAt) {
+        if (activeIdx !== -1) sharedSpots.splice(activeIdx, 1);
+        if (deletedIdx !== -1) deletedSharedSpots[deletedIdx] = updated; else deletedSharedSpots.push(updated);
+        announce(`飯搭子圈清單刪除了：${updated.name}（可以到「被刪除的店」復原）`);
+      } else {
+        if (deletedIdx !== -1) deletedSharedSpots.splice(deletedIdx, 1);
+        if (activeIdx !== -1) sharedSpots[activeIdx] = updated; else sharedSpots.push(updated);
+        announce(activeIdx !== -1 ? `飯搭子圈清單更新了：${updated.name}` : `飯搭子圈清單復原了：${updated.name}`);
+      }
+      updateSharedCountBadge();
       if (state.wheelMode === "shared") { recomputeCatsInData(); refresh(); }
     })
     .subscribe();
@@ -775,6 +949,7 @@ async function switchGroupSpots(groupId) {
   groupSpotsGroupId = groupId;
   if (sharedChannel) { supabase.removeChannel(sharedChannel); sharedChannel = null; }
   sharedSpots = [];
+  deletedSharedSpots = [];
   sharedSpotsLoadFailed = false;
   updateSharedCountBadge();
   if (groupId == null) {
@@ -797,7 +972,9 @@ async function loadPersonalSpots() {
     const { data, error } = await supabase
       .from("personal_spots").select("*").order("created_at", { ascending: true });
     if (error) throw error;
-    personalSpots = data.map(mapSharedRow);
+    const rows = data.map(mapSharedRow);
+    personalSpots = rows.filter(r => !r.deletedAt);
+    deletedPersonalSpots = rows.filter(r => r.deletedAt);
     personalSpotsLoadFailed = false;
   } catch (e) {
     personalSpotsLoadFailed = true;
@@ -816,24 +993,44 @@ function subscribePersonalSpots() {
       if (state.wheelMode === "personal") { recomputeCatsInData(); refresh(); }
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "personal_spots" }, payload => {
-      const i = personalSpots.findIndex(s => s.id === payload.new.id);
-      if (i === -1) return;
-      personalSpots[i] = mapSharedRow(payload.new);
+      const updated = mapSharedRow(payload.new);
+      const activeIdx = personalSpots.findIndex(s => s.id === updated.id);
+      const deletedIdx = deletedPersonalSpots.findIndex(s => s.id === updated.id);
+      if (updated.deletedAt) {
+        if (activeIdx !== -1) personalSpots.splice(activeIdx, 1);
+        if (deletedIdx !== -1) deletedPersonalSpots[deletedIdx] = updated; else deletedPersonalSpots.push(updated);
+      } else {
+        if (deletedIdx !== -1) deletedPersonalSpots.splice(deletedIdx, 1);
+        if (activeIdx !== -1) personalSpots[activeIdx] = updated; else personalSpots.push(updated);
+      }
+      updatePersonalCountBadge();
       if (state.wheelMode === "personal") { recomputeCatsInData(); refresh(); }
     })
     .subscribe();
 }
 
 /* ARIA Tabs Pattern：方向鍵在同一組頁籤之間切換並直接觸發選取，未選取的
-   頁籤 tabIndex 設 -1，Tab 鍵只會停在目前選取的那一個（issue #031）。 */
-function bindTabArrowKeys(tabs, onSelect) {
-  tabs.forEach((tab, i) => {
+   頁籤 tabIndex 設 -1，Tab 鍵只會停在目前選取的那一個（issue #031）。
+   出發點頁籤（renderOriginTabs）每次新增/登入都會重新呼叫這個函式，固定
+   的「基隆路一段 200 號」「目前位置」兩顆按鈕節點是同一個，沒防呆的話
+   等於每次都疊加一個新的 keydown 監聽器上去——按一次方向鍵會連續觸發
+   N 次選取／定位請求，且監聽器閉包裡的 tabs 陣列也會是呼叫當下的舊快照
+   （issue #002）。用 WeakSet 記錄「這顆按鈕綁過了沒」，同一顆按鈕只綁一次；
+   liveTabs 有給的話，方向鍵按下當下才重新查一次目前實際的頁籤列表，
+   不用閉包裡那份可能已經過期（缺新加地標）的陣列。 */
+const arrowKeyBoundTabs = new WeakSet();
+function bindTabArrowKeys(tabs, onSelect, liveTabs) {
+  tabs.forEach((tab) => {
+    if (arrowKeyBoundTabs.has(tab)) return;
+    arrowKeyBoundTabs.add(tab);
     tab.addEventListener("keydown", e => {
+      const list = liveTabs ? liveTabs() : tabs;
+      const i = list.indexOf(tab);
       let target = null;
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") target = tabs[(i + 1) % tabs.length];
-      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") target = tabs[(i - 1 + tabs.length) % tabs.length];
-      else if (e.key === "Home") target = tabs[0];
-      else if (e.key === "End") target = tabs[tabs.length - 1];
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") target = list[(i + 1) % list.length];
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") target = list[(i - 1 + list.length) % list.length];
+      else if (e.key === "Home") target = list[0];
+      else if (e.key === "End") target = list[list.length - 1];
       if (!target) return;
       e.preventDefault();
       target.focus();
@@ -904,7 +1101,7 @@ async function spin() {
       auth.remaining = 0;
       updateQuota();
     } else {
-      setHint("⚠️ 連線發生問題，請稍後再試", true);
+      setHint("⚠️ 網路好像卡住了，等一下再試試", true);
     }
     refresh();
     return;
@@ -967,7 +1164,7 @@ async function recordSpinOutcome(winner, spinId) {
       if (error) throw error;
     }
   } catch (e) {
-    setHint("⚠️ 結果同步失敗，個人紀錄可能沒存到，請重新整理確認", true);
+    setHint("⚠️ 結果沒同步上去，紀錄可能沒存到——重新整理確認一下", true);
   }
   // 個人轉盤轉出來的結果是私人的，不廣播給群組——不然會被誤當成「今天
   // 全組吃的」貼到群組看板上。只有飯搭子轉盤本身的結果才廣播。
@@ -978,7 +1175,7 @@ async function recordSpinOutcome(winner, spinId) {
       });
       if (error) throw error;
     } catch (e) {
-      setHint("⚠️ 群組結果廣播失敗，其他成員可能看不到，請重新整理確認", true);
+      setHint("⚠️ 圈子結果沒廣播出去，其他人可能看不到——重新整理確認一下", true);
     }
     // 不管廣播成功與否都要重新讀一次群組狀態，讓畫面反映後端目前的
     // 實際狀態，而不是繼續停在「輪到你」的舊資訊。
@@ -987,11 +1184,27 @@ async function recordSpinOutcome(winner, spinId) {
 }
 
 /* ══════════ 結果 ══════════ */
-/* 分享用 Web Share API（手機上會直接叫出 LINE／訊息等分享面板，符合
-   台灣情境）；不支援的瀏覽器（多數桌機）退回複製文字到剪貼簿，
-   按鈕文字短暫改成「已複製」當作回饋（功能建議 #3）。使用者自己按
-   取消分享（AbortError）不算失敗，不用退回複製。 */
+/* 分享優先順序：
+   1. LIFF 的 shareTargetPicker——LINE 原生的「選好友/群組」分享面板，
+      在 LINE 內開啟時直接呼叫得到，選完對方聊天室就收到訊息，比使用者
+      自己複製貼上少了好幾道手續。isApiAvailable() 已經把「是不是在
+      LINE 環境」「LIFF 版本支不支援」「LIFF console 有沒有開這個功能」
+      都判斷進去了，不支援就自然往下一種方式退。
+   2. 都不行才走 Web Share API（手機上會叫出系統分享面板）。
+   3. 兩者都不支援的瀏覽器（多數桌機）才退回複製文字到剪貼簿，按鈕文字
+      短暫改成「已複製」當作回饋（功能建議 #3）。
+   使用者自己取消分享（shareTargetPicker 取消是 resolve(undefined)、
+   navigator.share 取消是 AbortError）都不算失敗，不用再退回複製。 */
 async function shareResult(text, url, btn) {
+  const content = url ? `${text} ${url}` : text;
+  if (liffReady && typeof liff !== "undefined" && typeof liff.isApiAvailable === "function" && liff.isApiAvailable("shareTargetPicker")) {
+    try {
+      await liff.shareTargetPicker([{ type: "text", text: content }]);
+      return;
+    } catch (e) {
+      // shareTargetPicker 意外失敗才繼續往下嘗試其他分享方式
+    }
+  }
   if (navigator.share) {
     try {
       await navigator.share({ title: "午餐大轉輪", text, url });
@@ -1001,7 +1214,7 @@ async function shareResult(text, url, btn) {
     }
   }
   try {
-    await navigator.clipboard.writeText(url ? `${text} ${url}` : text);
+    await navigator.clipboard.writeText(content);
     if (btn) {
       const original = btn.textContent;
       btn.textContent = "已複製，可以貼到 LINE 囉！";
@@ -1014,8 +1227,11 @@ let currentResult = null;
 function showResult(r) {
   currentResult = r;
   $("rTitle").textContent = r.name;
+  // 共享/個人清單的 cat 是使用者自己送出的資料，組 innerHTML 前要跳脫，
+  // 跟 renderRoster()／openGroupResultDetail() 已經在做的一樣（issue #007）；
+  // 目前 DB 端有白名單 CHECK 約束擋著打不穿，但前端這層防禦不該省略。
   $("rBadges").innerHTML = `
-    <span class="badge">${CAT_EMOJI[r.cat] || ""} ${r.cat}</span>
+    <span class="badge">${CAT_EMOJI[r.cat] || ""} ${escapeHtml(r.cat)}</span>
     <span class="badge money">NT$${r.price[0]}–${r.price[1]}</span>
     <span class="badge">🚶 ${walkMinutesFor(r)} 分鐘</span>`;
   $("rAddr").textContent = r.addr;
@@ -1120,8 +1336,8 @@ function selectOrigin(key, latLng, name) {
   syncOriginTabs();
   setOriginMsg(
     latLng
-      ? `已套用「${name}」，飯搭子轉盤／個人轉盤的走路時間都已重算（直線距離估算，非實際路線）`
-      : "飯搭子轉盤／個人轉盤的走路時間都會跟著重算（直線距離估算，非實際路線）",
+      ? `已切到「${name}」出發，走路時間重算好了`
+      : "走路時間會跟著出發點重算（直線距離估算，非實際路線）",
     latLng ? "ok" : ""
   );
   recomputeCatsInData();
@@ -1141,7 +1357,8 @@ function renderOriginTabs() {
     gpsBtn.parentNode.insertBefore(btn, gpsBtn);
   }
   syncOriginTabs();
-  bindTabArrowKeys([...document.querySelectorAll('#originTabs .wheel-tab[role="tab"]')], tab => tab.click());
+  const getOriginTabs = () => [...document.querySelectorAll('#originTabs .wheel-tab[role="tab"]')];
+  bindTabArrowKeys(getOriginTabs(), tab => tab.click(), getOriginTabs);
 }
 /* 反查地址用 OpenStreetMap 的 Nominatim（免金鑰的免費服務），失敗就回 null，
    前端只顯示座標換算的結果、不會整個功能掛掉。 */
@@ -1172,21 +1389,21 @@ $("originGpsBtn").onclick = () => {
       const thisOrigin = [pos.coords.latitude, pos.coords.longitude];
       $("originGpsBtn").disabled = false;
       selectOrigin("gps", thisOrigin, "目前位置");
-      setOriginMsg("已套用目前位置，查詢地址中…（飯搭子轉盤／個人轉盤的走路時間都已重算，直線距離估算，非實際路線）", "ok");
+      setOriginMsg("定位好了！走路時間重算完成，查地址中…", "ok");
       const address = await reverseGeocode(thisOrigin[0], thisOrigin[1]);
       // 查地址的這段時間，使用者可能已經切回別的出發點或重新定位過了——
       // customOrigin 這時已經不是同一個參照，代表這次查詢結果過期了，不要覆蓋畫面。
       if (customOrigin !== thisOrigin) return;
       setOriginMsg(
         address
-          ? `目前位置：${address}（飯搭子轉盤／個人轉盤的走路時間都已重算，直線距離估算，非實際路線）`
-          : "已套用目前位置，飯搭子轉盤／個人轉盤的走路時間都跟著重算（直線距離估算，非實際路線；地址查詢失敗）",
+          ? `你在：${address}`
+          : "定位好了！走路時間重算完成（地址查不出來，不影響）",
         "ok"
       );
     },
     () => {
       $("originGpsBtn").disabled = false;
-      setOriginMsg("定位失敗，請確認瀏覽器/系統有允許這個網頁存取位置", "err");
+      setOriginMsg("抓不到你的位置 😥 看一下瀏覽器是不是沒開定位權限", "err");
     },
     { enableHighAccuracy: false, timeout: 10000 }
   );
@@ -1249,7 +1466,7 @@ $("originAddAutoFillBtn").onclick = async () => {
       msg.className = "spot-quick-msg err";
     }
   } catch (e) {
-    msg.textContent = "連線發生問題，麻煩稍後再試";
+    msg.textContent = "網路好像卡住了，等一下再試試";
     msg.className = "spot-quick-msg err";
   } finally {
     $("originAddAutoFillBtn").disabled = false;
@@ -1259,8 +1476,8 @@ $("originAddSubmitBtn").onclick = async () => {
   if (!auth.user) { openGate(); return; }
   const name = $("originAddName").value.trim();
   const latLng = originAddParsedLatLng;
-  if (!name) { setOriginAddMsg("請填地標名稱", "err"); return; }
-  if (!latLng) { setOriginAddMsg("請先貼網址並按自動帶入取得座標", "err"); return; }
+  if (!name) { setOriginAddMsg("地標名稱還沒填喔", "err"); return; }
+  if (!latLng) { setOriginAddMsg("先貼網址按「自動帶入」抓座標喔", "err"); return; }
   $("originAddSubmitBtn").disabled = true;
   setOriginAddMsg("新增中…", "");
   try {
@@ -1271,10 +1488,10 @@ $("originAddSubmitBtn").onclick = async () => {
     userOrigins.push(data);
     renderOriginTabs();
     selectOrigin("preset:" + data.id, [data.lat, data.lng], data.name);
-    setOriginAddMsg("新增成功！", "ok");
+    setOriginAddMsg("加好了！", "ok");
     setTimeout(() => closeVeil("originAddVeil"), 700);
   } catch (e) {
-    setOriginAddMsg("連線發生問題，請稍後再試", "err");
+    setOriginAddMsg("網路好像卡住了，等一下再試試", "err");
   } finally {
     $("originAddSubmitBtn").disabled = false;
   }
@@ -1283,7 +1500,7 @@ $("spinBtn").onclick = spin;
 $("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
 $("rShareBtn").onclick = () => {
   if (!currentResult) return;
-  shareResult(`今天午餐吃：${currentResult.name} 🍽️`, $("rMap").href, $("rShareBtn"));
+  shareResult(`命運轉輪說，今天吃：${currentResult.name} 🍽️`, $("rMap").href, $("rShareBtn"));
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -1337,11 +1554,11 @@ $("liffReportBtn").onclick = async () => {
   try {
     await liff.sendMessages([{
       type: "text",
-      text: `根據午餐大轉盤，我今天的午餐是：【${currentResult.name}】${$("rMap").href}`
+      text: `根據午餐大轉輪，我今天的午餐是：【${currentResult.name}】${$("rMap").href}`
     }]);
     liff.closeWindow();
   } catch (e) {
-    setLiffMsg("⚠️ 回報失敗，請稍後再試", "err");
+    setLiffMsg("⚠️ 回報失敗，等一下再試試", "err");
     btn.disabled = false;
   }
 };
@@ -1349,10 +1566,22 @@ $("liffReportBtn").onclick = async () => {
 $("closeModal").onclick = hideResult;
 $("veil").onclick = e => { if (e.target === $("veil")) hideResult(); };
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { hideResult(); closeVeil("groupResultVeil"); closeBonusModal(); closeSpotModal(); closeVeil("originAddVeil"); closeProfileModal(); closeGroupsModal(); closeUserMenu(); }
+  if (e.key === "Escape") {
+    hideResult(); closeVeil("groupResultVeil");
+    // 廣告計時還沒到、按鈕還是 disabled 狀態時 claimAndCloseBonusModal() 會
+    // 自己 no-op（見函式內部判斷），行為跟按 X 一致；計時到了才會真的領取
+    // 加轉再關窗，不讓 Esc 變成繞過「一定要按 X 才會核發額度」的後門
+    // （原本 Esc 直接 closeBonusModal() 完全不領取，使用者按 Esc 關掉會
+    // 誤以為領到了其實沒有）。
+    if ($("bonusVeil").classList.contains("show")) claimAndCloseBonusModal(); else closeBonusModal();
+    closeSpotModal(); closeVeil("originAddVeil"); closeProfileModal(); closeGroupsModal(); closeUserMenu();
+  }
   if (e.code === "Space"
       && openModalCount === 0
-      && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement?.tagName || "")) {
+      // <summary>（「看看今天名單裡有哪些店」摺疊區塊）本來就有原生的空白鍵
+      // 展開/收合行為，沒排除在外的話會被下面的 preventDefault() 蓋掉，
+      // 變成一邊展開名單一邊背景偷轉一次、真的扣掉使用者的每日次數（issue #001）。
+      && !/^(INPUT|TEXTAREA|SELECT|BUTTON|SUMMARY)$/.test(document.activeElement?.tagName || "")) {
     e.preventDefault();
     spin();
   }
@@ -1409,7 +1638,7 @@ async function fetchStatus() {
   updateQuota();
   // updateQuota() 內部會把 hint 重設回預設文字，錯誤訊息要在它之後設，
   // 才不會被立刻蓋掉（issue #020）。
-  if (failed) setHint("⚠️ 讀取次數資訊失敗，請重新整理再試", true);
+  if (failed) setHint("⚠️ 讀取次數資訊失敗，重新整理一下再試", true);
   refresh();
 }
 
@@ -1441,7 +1670,7 @@ function openBonusModal() {
   clearTimeout(bonusCloseTimer);
   bonusCloseTimer = setTimeout(() => {
     $("bonusCloseBtn").disabled = false;
-    $("bonusTimer").textContent = "看完了嗎？按右上角 × 領取加轉";
+    $("bonusTimer").textContent = "看完啦？按右上角 × 拿你的加轉";
   }, 2000);
 }
 function closeBonusModal() {
@@ -1459,11 +1688,11 @@ async function claimAndCloseBonusModal() {
     } else {
       // 領取失敗就不關窗，不然使用者會以為領到了但其實次數沒有增加
       // （issue #015）。
-      $("bonusTimer").textContent = "加轉領取失敗，請再按一次 × 重試";
+      $("bonusTimer").textContent = "哎呀沒領到，再按一次 × 試試";
       $("bonusCloseBtn").disabled = false;
     }
   } catch (e) {
-    $("bonusTimer").textContent = "連線發生問題，請再按一次 × 重試";
+    $("bonusTimer").textContent = "網路好像卡住了，再按一次 × 試試";
     $("bonusCloseBtn").disabled = false;
   }
 }
@@ -1582,7 +1811,10 @@ $("spotAutoFillBtn").onclick = async () => {
     if (data.name) $("spotName").value = data.name;
     if (data.lat != null && data.lng != null) {
       spotParsedLatLng = [data.lat, data.lng];
-      $("spotWalk").value = estimateWalkMinutes(data.lat, data.lng);
+      // 使用者切到自訂出發點（例如住家）時，估算也該用那個出發點算，
+      // 不然這裡填進去的分鐘數會跟畫面其他地方（已用自訂出發點重算過的
+      // 走路時間）對不上，看起來像是資料算錯了（issue #004）。
+      $("spotWalk").value = estimateWalkMinutes(data.lat, data.lng, customOrigin || undefined);
       msg.textContent = "已帶入店名／估算走路時間（直線距離估算，可自行調整）；價位跟類別請手動選";
       msg.className = "spot-quick-msg ok";
     } else {
@@ -1591,7 +1823,7 @@ $("spotAutoFillBtn").onclick = async () => {
       msg.className = "spot-quick-msg err";
     }
   } catch (e) {
-    msg.textContent = "連線發生問題，麻煩手動填寫";
+    msg.textContent = "網路好像卡住了，麻煩手動填一下";
     msg.className = "spot-quick-msg err";
   } finally {
     $("spotAutoFillBtn").disabled = false;
@@ -1615,8 +1847,8 @@ $("spotSubmitBtn").onclick = async () => {
   const mapsUrl = $("spotQuickUrl").value.trim();
   const latLng = spotParsedLatLng;
 
-  if (!name) { setSpotMsg("請填店名", "err"); return; }
-  if (mode === "shared" && !activeGroup) { setSpotMsg("請先選擇一個飯搭子圈", "err"); return; }
+  if (!name) { setSpotMsg("店名還沒填喔", "err"); return; }
+  if (mode === "shared" && !activeGroup) { setSpotMsg("先選一個飯搭子圈喔", "err"); return; }
 
   $("spotSubmitBtn").disabled = true;
   setSpotMsg(submittingId ? "儲存中…" : "送出中…", "");
@@ -1638,7 +1870,6 @@ $("spotSubmitBtn").onclick = async () => {
         recomputeCatsInData();
         refresh();
       }
-      if (myToken === spotFormToken) setSpotMsg("已儲存變更！", "ok");
     } else {
       if (mode === "personal") payload.user_id = auth.user.id;
       else { payload.group_id = activeGroup.group_id; payload.created_by = auth.user.id; }
@@ -1653,16 +1884,25 @@ $("spotSubmitBtn").onclick = async () => {
         recomputeCatsInData();
         refresh();
       }
-      if (myToken === spotFormToken) setSpotMsg("新增成功！", "ok");
     }
     // 使用者送出後又重新開過窗（token 對不上），這裡就不要再去清空／
-    // 關掉他現在正在填的表單。
+    // 關掉他現在正在填的表單。成功訊息要在 resetSpotForm() 之後才設——
+    // resetSpotForm() 會把 spotMsg 清空，先設會被立刻蓋掉、根本看不到。
     if (myToken === spotFormToken) {
       resetSpotForm();
-      setTimeout(closeSpotModal, 700);
+      const okText = submittingId ? "改好了！" : "加好了！";
+      const maxWalk = +$("walk").max;
+      if (walk > maxWalk) {
+        // 超過滑桿上限的地點在名單/轉盤上都看不到（見 renderRoster），
+        // 要當面講清楚，而且不自動關窗，確保這句提醒有被看到（issue #005）。
+        setSpotMsg(`${okText}提醒：走路 ${walk} 分鐘超過篩選上限 ${maxWalk} 分鐘，這筆以目前的出發點不會出現在名單和轉盤上`, "ok");
+      } else {
+        setSpotMsg(okText, "ok");
+        setTimeout(closeSpotModal, 700);
+      }
     }
   } catch (e) {
-    if (myToken === spotFormToken) setSpotMsg("連線發生問題，請稍後再試", "err");
+    if (myToken === spotFormToken) setSpotMsg("網路好像卡住了，等一下再試試", "err");
   } finally {
     $("spotSubmitBtn").disabled = false;
   }
@@ -1719,7 +1959,7 @@ async function loadSpinHistory() {
       return `<div class="profile-history-row"><span class="h-date">${dateStr}・${modeTag}</span><span class="h-name">${escapeHtml(r.winner_name)}</span></div>`;
     }).join("");
   } catch (e) {
-    box.innerHTML = `<div class="profile-history-empty">讀取失敗，請稍後再試</div>`;
+    box.innerHTML = `<div class="profile-history-empty">紀錄讀不出來，等一下再試試</div>`;
   }
 }
 
@@ -1754,15 +1994,23 @@ $("profileSaveBtn").onclick = async () => {
   try {
     let avatarUrl = myProfile.avatar_url;
     const file = $("profileAvatarInput").files[0];
+    // 圖片太大時原本會直接 return，暱稱欄位就算有改也一起沒存到，而且
+    // 錯誤訊息只提圖片、完全沒講暱稱其實也沒存——使用者只會以為暱稱
+    // 存好了。改成跳過大頭照這步、繼續往下存暱稱，最後再一起講清楚
+    // 哪個有存哪個沒存（issue #012）。
+    let avatarTooBig = false;
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { setProfileMsg("圖片太大了，最大 2MB", "err"); return; }
-      const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
-      const path = `${auth.user.id}/avatar.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("avatars").upload(path, file, { upsert: true, contentType: file.type || "image/png" });
-      if (upErr) { setProfileMsg("大頭照上傳失敗：" + upErr.message, "err"); return; }
-      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
-      avatarUrl = pub.publicUrl + "?t=" + Date.now();
+      if (file.size > 2 * 1024 * 1024) {
+        avatarTooBig = true;
+      } else {
+        const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+        const path = `${auth.user.id}/avatar.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("avatars").upload(path, file, { upsert: true, contentType: file.type || "image/png" });
+        if (upErr) { setProfileMsg("大頭照上傳失敗：" + upErr.message, "err"); return; }
+        const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+        avatarUrl = pub.publicUrl + "?t=" + Date.now();
+      }
     }
     const nickname = $("profileNickname").value.trim().slice(0, 40) || null;
     const { error } = await supabase.from("profiles").upsert({
@@ -1772,9 +2020,10 @@ $("profileSaveBtn").onclick = async () => {
     myProfile = { nickname, avatar_url: avatarUrl };
     updateAvatarThumb();
     updateWhoDisplay();
-    setProfileMsg("已儲存！", "ok");
+    if (avatarTooBig) setProfileMsg("暱稱存好了，但圖片太大了（上限 2MB），大頭照沒有更新", "err");
+    else setProfileMsg("存好了！", "ok");
   } catch (e) {
-    setProfileMsg("連線發生問題，請稍後再試", "err");
+    setProfileMsg("網路好像卡住了，等一下再試試", "err");
   } finally {
     $("profileSaveBtn").disabled = false;
   }
@@ -1811,6 +2060,9 @@ function syncGroupWheelUI() {
   $("stage").hidden = showGate;
   $("wheelMeta").hidden = showGate;
   $("rosterDetails").hidden = showGate;
+  // 復原區塊只在共享／個人轉盤（能刪除的兩種模式）才有意義，預設轉盤本來
+  // 就不能編輯，沒有東西可以復原。
+  $("deletedRosterDetails").hidden = state.wheelMode === "default" || showGate;
   $("addSpotBtn").hidden = state.wheelMode === "default" || showGate;
 
   const showSwitcher = state.wheelMode === "shared" && myGroups.length > 1;
@@ -1924,14 +2176,14 @@ async function joinGroup(groupId, name, btn) {
   setGroupListMsg("加入中…", "");
   try {
     const { data, error } = await supabase.rpc("join_group", { p_group_id: groupId });
-    if (error || !data || !data.ok) { setGroupListMsg("加入失敗，請稍後再試", "err"); btn.disabled = false; return; }
-    setGroupListMsg("已加入！", "ok");
+    if (error || !data || !data.ok) { setGroupListMsg("加入失敗，等一下再試試", "err"); btn.disabled = false; return; }
+    setGroupListMsg("加入了，歡迎入圈！", "ok");
     await loadMyGroups();
     await loadAllGroups();
     await activateGroup(groupId, name);
     openGroupDetail(groupId);
   } catch (e) {
-    setGroupListMsg("連線發生問題，請稍後再試", "err");
+    setGroupListMsg("網路好像卡住了，等一下再試試", "err");
     btn.disabled = false;
   }
 }
@@ -1939,19 +2191,19 @@ async function joinGroup(groupId, name, btn) {
 $("groupNameInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("groupCreateBtn").click(); } });
 $("groupCreateBtn").onclick = async () => {
   const name = $("groupNameInput").value.trim();
-  if (!name) { setGroupListMsg("請輸入群組名稱", "err"); return; }
+  if (!name) { setGroupListMsg("幫圈子取個名字吧", "err"); return; }
   $("groupCreateBtn").disabled = true;
   setGroupListMsg("建立中…", "");
   try {
     const { data, error } = await supabase.rpc("create_group", { p_name: name });
-    if (error || !data || !data.ok) { setGroupListMsg("建立失敗，請稍後再試", "err"); return; }
+    if (error || !data || !data.ok) { setGroupListMsg("建立失敗，等一下再試試", "err"); return; }
     $("groupNameInput").value = "";
-    setGroupListMsg("建立成功！", "ok");
+    setGroupListMsg("開圈成功 🎉", "ok");
     await loadMyGroups();
     await activateGroup(data.group_id, name);
     openGroupDetail(data.group_id);
   } catch (e) {
-    setGroupListMsg("連線發生問題，請稍後再試", "err");
+    setGroupListMsg("網路好像卡住了，等一下再試試", "err");
   } finally {
     $("groupCreateBtn").disabled = false;
   }
@@ -1978,7 +2230,7 @@ function resetGroupLeaveBtn() {
 async function refreshGroupDetail(groupId) {
   try {
     const { data, error } = await supabase.rpc("group_status", { p_group_id: groupId });
-    if (error || !data || !data.ok) { setGroupDetailMsg("讀取群組資料失敗", "err"); return; }
+    if (error || !data || !data.ok) { setGroupDetailMsg("讀不到這個圈的資料，重新整理看看", "err"); return; }
     currentGroupDetail = data;
     const g = myGroups.find(x => x.group_id === groupId);
     $("groupDetailName").textContent = g ? g.name : "飯搭子圈";
@@ -1987,7 +2239,7 @@ async function refreshGroupDetail(groupId) {
     updateGroupUseWheelBtn();
     if (activeGroup && activeGroup.group_id === groupId) { activeGroupDetail = data; syncGroupBanner(); }
   } catch (e) {
-    setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+    setGroupDetailMsg("網路好像卡住了，等一下再試試", "err");
   }
 }
 
@@ -2003,9 +2255,9 @@ function renderGroupMembers(data) {
       <img class="group-member-avatar" src="${escapeHtml(m.avatar_url || AVATAR_FALLBACK)}" alt="">
       <div class="group-member-info">
         <span class="group-member-name">${escapeHtml(m.nickname)}</span>
-        ${isSpinner ? '<span class="group-member-badge">🎯 今日轉盤人</span>' : ""}
+        ${isSpinner ? '<span class="group-member-badge">🎯 今日主轉手</span>' : ""}
       </div>
-      ${canRemove ? `<button class="group-member-remove" type="button" aria-label="把 ${escapeHtml(m.nickname)} 移出群組">×</button>` : ""}
+      ${canRemove ? `<button class="group-member-remove" type="button" aria-label="把 ${escapeHtml(m.nickname)} 移出圈子">×</button>` : ""}
     `;
     const removeBtn = row.querySelector(".group-member-remove");
     if (removeBtn) removeBtn.onclick = () => armOrRemoveGroupMember(removeBtn, data.group_id, m.user_id, m.nickname);
@@ -2024,13 +2276,13 @@ function armOrRemoveGroupMember(btn, groupId, userId, nickname) {
   }
   btn.dataset.armed = "1";
   btn.textContent = "確定？";
-  btn.setAttribute("aria-label", `確定要把 ${nickname} 移出群組嗎？`);
+  btn.setAttribute("aria-label", `確定要把 ${nickname} 移出圈子嗎？`);
   btn.classList.add("confirm");
   setTimeout(() => {
     if (btn.isConnected) {
       btn.dataset.armed = "0";
       btn.textContent = "×";
-      btn.setAttribute("aria-label", `把 ${nickname} 移出群組`);
+      btn.setAttribute("aria-label", `把 ${nickname} 移出圈子`);
       btn.classList.remove("confirm");
     }
   }, 2500);
@@ -2042,7 +2294,7 @@ async function removeGroupMember(groupId, userId, btn) {
   try {
     const { data, error } = await supabase.rpc("remove_group_member", { p_group_id: groupId, p_user_id: userId });
     if (error || !data || !data.ok) {
-      setGroupDetailMsg("移除失敗，請稍後再試", "err");
+      setGroupDetailMsg("移除失敗，等一下再試試", "err");
       if (btn) btn.disabled = false;
       return;
     }
@@ -2050,7 +2302,7 @@ async function removeGroupMember(groupId, userId, btn) {
     await refreshGroupDetail(groupId);
     await loadMyGroups();
   } catch (e) {
-    setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+    setGroupDetailMsg("網路好像卡住了，等一下再試試", "err");
     if (btn) btn.disabled = false;
   }
 }
@@ -2067,7 +2319,7 @@ $("groupLeaveBtn").onclick = () => {
     return;
   }
   btn.dataset.armed = "1";
-  btn.textContent = "確定要退出嗎？再按一次確認";
+  btn.textContent = "退出就看不到這個圈囉，再按一次確認";
   btn.classList.add("confirm");
   setTimeout(() => {
     if (btn.isConnected) resetGroupLeaveBtn();
@@ -2079,7 +2331,7 @@ async function leaveGroup(groupId, btn) {
   try {
     const { data, error } = await supabase.rpc("leave_group", { p_group_id: groupId });
     if (error || !data || !data.ok) {
-      setGroupDetailMsg("退出失敗，請稍後再試", "err");
+      setGroupDetailMsg("退出失敗，等一下再試試", "err");
       if (btn) btn.disabled = false;
       return;
     }
@@ -2088,7 +2340,7 @@ async function leaveGroup(groupId, btn) {
     await loadMyGroups();
     await loadAllGroups();
   } catch (e) {
-    setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+    setGroupDetailMsg("網路好像卡住了，等一下再試試", "err");
     if (btn) btn.disabled = false;
   }
 }
@@ -2106,7 +2358,7 @@ function updateGroupUseWheelBtn() {
   const btn = $("groupUseWheelBtn");
   if (!currentGroupDetail) return;
   const isActive = activeGroup && activeGroup.group_id === currentGroupDetail.group_id;
-  btn.textContent = isActive ? "已經是使用中的群組" : "用這個群組轉盤";
+  btn.textContent = isActive ? "現在就是用這個圈" : "用這個圈轉盤";
   btn.disabled = !!isActive;
 }
 
@@ -2115,7 +2367,7 @@ $("groupDetailBack").onclick = () => { showGroupListView(); loadMyGroups(); };
 $("groupAddEmail").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("groupAddBtn").click(); } });
 $("groupAddBtn").onclick = async () => {
   const email = $("groupAddEmail").value.trim();
-  if (!email) { setGroupDetailMsg("請輸入 email", "err"); return; }
+  if (!email) { setGroupDetailMsg("先填對方的 email 喔", "err"); return; }
   if (!currentGroupDetail) return;
   $("groupAddBtn").disabled = true;
   setGroupDetailMsg("加入中…", "");
@@ -2124,17 +2376,17 @@ $("groupAddBtn").onclick = async () => {
       p_group_id: currentGroupDetail.group_id, p_email: email
     });
     if (error || !data || !data.ok) {
-      setGroupDetailMsg("加入失敗，請稍後再試", "err");
+      setGroupDetailMsg("加入失敗，等一下再試試", "err");
       return;
     }
     $("groupAddEmail").value = "";
     // 後端刻意不回傳「查無帳號」跟「已加入」的差異，避免被拿來測試任意
     // email 是不是已註冊帳號（issue #017），訊息跟著改成中性用詞。
-    setGroupDetailMsg("邀請已送出（若對方已註冊，會直接加入名單）", "ok");
+    setGroupDetailMsg("好了！如果這個 email 有帳號，他已經在名單裡囉", "ok");
     await refreshGroupDetail(currentGroupDetail.group_id);
     await loadMyGroups();
   } catch (e) {
-    setGroupDetailMsg("連線發生問題，請稍後再試", "err");
+    setGroupDetailMsg("網路好像卡住了，等一下再試試", "err");
   } finally {
     $("groupAddBtn").disabled = false;
   }
@@ -2153,11 +2405,18 @@ $("groupUseWheelBtn").onclick = () => {
   refresh();
 };
 
+/* 按「先切回自己轉」除了解除綁定的群組，也要真的把分頁切回個人轉盤——
+   不然使用者還留在飯搭子分頁，但沒有綁定的群組，「+ 新增地點」會報錯
+   「先選一個飯搭子圈喔」，名單也會誤顯示成「還是空的」，變成一個死路
+   （原本只加入一個群組時完全沒有其他分頁按鈕可以點回去）。這裡跟
+   refreshActiveGroupStatus() 裡「被踢出群組」那條路徑改用同一套處理，
+   兩種情境的最終畫面才會一致（issue #006）。 */
 function leaveGroupMode() {
   activeGroup = null;
   activeGroupDetail = null;
   groupBannerExpanded = false;
   switchGroupSpots(null);
+  if (state.wheelMode !== "personal") { state.wheelMode = "personal"; syncWheelModeUI(); recomputeCatsInData(); }
   syncGroupBanner();
   refresh();
 }
@@ -2191,7 +2450,7 @@ function syncGroupBanner() {
     else if (d.is_daily_spinner) summaryText = `🍚 ${activeGroup.name} · 輪到你了！`;
     else summaryText = `🍚 ${activeGroup.name} · 輪到 ${spinner ? spinner.nickname : "…"} 轉盤`;
   } else {
-    turnEl.textContent = "讀取輪值資訊中…";
+    turnEl.textContent = "看看今天輪到誰…";
     turnEl.classList.remove("mine");
     summaryText = `🍚 ${activeGroup.name} · 讀取中…`;
   }
@@ -2276,7 +2535,7 @@ async function refreshActiveGroupStatus() {
       activeGroupDetail = null;
       switchGroupSpots(null);
       if (state.wheelMode !== "personal") { state.wheelMode = "personal"; syncWheelModeUI(); }
-      setHint("你已經不在這個群組了，已切回個人轉盤", true);
+      setHint("你已經不在這個圈了，先切回個人轉盤囉", true);
     }
   } catch (e) {}
   syncGroupBanner();
@@ -2374,6 +2633,15 @@ async function applySession(session) {
     sharedSpots = [];
     personalSpots = [];
     userOrigins = [];
+    // 登出後畫面上不能留著上一位使用者的痕跡：共享/個人清單的數量徽章、
+    // 自訂出發地標按鈕（名稱＋座標）都要一併清掉重繪，不然換一個人在
+    // 同一台裝置登入前，會先看到上一位使用者的資料殘留在畫面上（issue #003）。
+    updateSharedCountBadge();
+    updatePersonalCountBadge();
+    customOrigin = null;
+    currentOriginKey = "default";
+    renderOriginTabs();
+    setOriginMsg("走路時間會跟著出發點重算（直線距離估算，非實際路線）", "");
     // 登出後沒人在看畫面了，訂閱還留著只是白白一直收 Realtime 事件、
     // 觸發不必要的重繪（issue #023）；下次登入 subscribeSharedSpots()／
     // subscribeGroupResults() 的「已有訂閱就 return」防呆會自然重建。
@@ -2390,8 +2658,8 @@ async function applySession(session) {
 function readGateInput() {
   const email = $("gateEmail").value.trim();
   const password = $("gatePassword").value;
-  if (!email || !email.includes("@")) { setGateMsg("請輸入正確的 email", "err"); return null; }
-  if (!password || password.length < 6) { setGateMsg("密碼至少需要 6 碼", "err"); return null; }
+  if (!email || !email.includes("@")) { setGateMsg("這個 email 好像怪怪的，再看一下？", "err"); return null; }
+  if (!password || password.length < 6) { setGateMsg("密碼要 6 碼以上喔", "err"); return null; }
   return { email, password };
 }
 async function withGateBusy(busyText, fn) {
@@ -2403,7 +2671,7 @@ async function withGateBusy(busyText, fn) {
 $("gateSubmit").onclick = async () => {
   const cred = readGateInput();
   if (!cred) return;
-  await withGateBusy("處理中…", async () => {
+  await withGateBusy("進場中…", async () => {
     const { error: loginError } = await supabase.auth.signInWithPassword(cred);
     if (!loginError) return; // 登入成功，onAuthStateChange 會自動帶進場
     const { data, error: signUpError } = await supabase.auth.signUp(cred);
@@ -2411,7 +2679,7 @@ $("gateSubmit").onclick = async () => {
       if (!data.session) setGateMsg("帳號已建立，但信箱驗證尚未關閉，請到 Supabase 後台關閉 Confirm email", "err");
       return; // 有 session 的話 onAuthStateChange 會自動帶進場
     }
-    if (/registered|exists/i.test(signUpError.message)) setGateMsg("密碼錯誤，請再試一次", "err");
+    if (/registered|exists/i.test(signUpError.message)) setGateMsg("密碼不對喔，再試一次", "err");
     else setGateMsg(signUpError.message, "err");
   });
 };
