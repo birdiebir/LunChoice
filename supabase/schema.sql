@@ -247,6 +247,10 @@ alter table public.shared_spots add constraint shared_spots_note_len check (char
 alter table public.shared_spots drop constraint if exists shared_spots_maps_url_len;
 alter table public.shared_spots add constraint shared_spots_maps_url_len check (char_length(maps_url) <= 500);
 
+-- 軟刪除／復原（issue #051）：deleted_at 有值代表已刪除，deleted_by 記錄是誰刪的。
+alter table public.shared_spots add column if not exists deleted_at timestamptz;
+alter table public.shared_spots add column if not exists deleted_by uuid references auth.users(id) on delete set null;
+
 create index if not exists shared_spots_created_at_idx on public.shared_spots (created_at);
 
 alter table public.shared_spots enable row level security;
@@ -284,6 +288,27 @@ drop trigger if exists shared_spots_lock_created_by_trg on public.shared_spots;
 create trigger shared_spots_lock_created_by_trg
 before update on public.shared_spots
 for each row execute function public.shared_spots_lock_created_by();
+
+-- 同樣道理，deleted_by 也不能讓任何登入者填任意 uuid 冒名「是誰刪的」——
+-- 一律由後端依 auth.uid() 推導：刪除（deleted_at 從 null 變有值）時蓋成
+-- 自己，復原（deleted_at 變回 null）時一併清空（issue #051）。
+create or replace function public.shared_spots_lock_deleted_by()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.deleted_at is not null then
+    new.deleted_by := auth.uid();
+  else
+    new.deleted_by := null;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists shared_spots_lock_deleted_by_trg on public.shared_spots;
+create trigger shared_spots_lock_deleted_by_trg
+before update on public.shared_spots
+for each row execute function public.shared_spots_lock_deleted_by();
 
 revoke all on public.shared_spots from public, anon;
 grant select, insert, update on public.shared_spots to authenticated;
@@ -480,6 +505,12 @@ create table if not exists public.personal_spots (
   constraint personal_spots_maps_url_len check (char_length(maps_url) <= 500),
   constraint personal_spots_cat_whitelist check (cat in ('麵食','飯食便當','日式','韓式','東南亞','西式','台式小吃','健康餐盒','鍋物','咖啡輕食','其他'))
 );
+
+-- 軟刪除／復原（issue #051）：跟 shared_spots 同一套設計。個人清單只有
+-- 本人能改（update policy 限定 auth.uid() = user_id），deleted_by 沒有
+-- 冒名風險，不需要額外的鎖定 trigger。
+alter table public.personal_spots add column if not exists deleted_at timestamptz;
+alter table public.personal_spots add column if not exists deleted_by uuid references auth.users(id) on delete set null;
 
 create index if not exists personal_spots_user_id_idx on public.personal_spots (user_id);
 

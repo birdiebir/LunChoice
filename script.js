@@ -2347,7 +2347,7 @@ async function leaveGroup(groupId, btn) {
 
 function renderGroupResult(data) {
   const box = $("groupDetailResult");
-  if (!data.today_result) { box.hidden = true; box.onclick = null; return; }
+  if (!data.today_result) { box.hidden = true; box.onclick = null; box.innerHTML = ""; return; }
   box.hidden = false;
   const modeTag = data.today_result.wheel_mode === "shared" ? "飯搭子轉盤" : "預設轉盤";
   box.innerHTML = `🎉 今天大家跟著吃這個：<b>${escapeHtml(data.today_result.winner_name)}</b>（${modeTag}）<span class="result-hint">詳情 ›</span>`;
@@ -2464,6 +2464,7 @@ function syncGroupBanner() {
   } else {
     resultEl.hidden = true;
     resultEl.onclick = null;
+    resultEl.innerHTML = "";
   }
   setGroupBannerExpanded(groupBannerExpanded);
 }

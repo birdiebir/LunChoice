@@ -179,6 +179,7 @@
     width: 100%; text-align: left; color: var(--text); cursor: pointer;
   }
   .group-banner-result:hover, .group-banner-result:focus-visible { filter: brightness(0.97); }
+  .group-banner-result[hidden] { display: none; } /* 跟 .btn 同款 display 蓋掉 hidden 的問題，補上（issue #053） */
   .result-hint { margin-left: auto; color: var(--text-2); font-size: var(--fs-xs); }
 
   /* 「當前篩選 X 家」跟「今天還可轉 N 次」語意上是同一組資訊，用一個
@@ -692,6 +693,7 @@
     display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
   }
   .group-today-result:hover, .group-today-result:focus-visible { filter: brightness(0.97); }
+  .group-today-result[hidden] { display: none; } /* 跟 .btn 同款 display 蓋掉 hidden 的問題，補上（issue #053） */
   #groupUseWheelBtn { width: 100%; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); }
   .group-leave-btn {
     background: none; border: none; color: var(--action); font: inherit; font-size: var(--fs-sm);
