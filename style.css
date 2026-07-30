@@ -1,27 +1,30 @@
   /* ══════════════════════════════════════════════════════════
      設計系統 Design Tokens
-     配色：藍白極簡風。--accent／--action 都在同一個藍色家族裡
-     （--action 是主按鈕用的正藍，--accent 是輔助強調用的中藍），
-     搭大量白／淺灰藍留白。只有亮色模式，不跟隨系統切換暗色。
+     配色：自助餐分格餐盤風。頁面底色是暖石灰的「餐盤」，卡片是暖白
+     的「紙托」；--action 是辣椒紅（轉盤、主 CTA、錯誤訊息），--accent
+     是咖哩金（次要強調、已選中狀態、連結）。變數名稱維持原樣，方便
+     全檔案既有的 var(--x) 直接吃到新配色，不用逐一改選取器。
+     只有亮色模式，不跟隨系統切換暗色（沿用原本設計決策）。
      ══════════════════════════════════════════════════════════ */
   :root {
     /* 顏色 */
-    --bg: #FFFFFF;
-    --surface: #FFFFFF;
-    --surface-2: #EEF3FA;
-    --text: #16233A;
-    --text-2: #5B6B80;
-    --line: #DCE6F2;
-    --accent: #2563EB;
-    --accent-soft: #E8F0FE;
+    --bg: #F1EADC;
+    --surface: #FFFEFA;
+    --surface-2: #F7F1E3;
+    --text: #2B2117;
+    --text-2: #7A6C57;
+    --line: #E1D5B8;
+    --accent: #97650A;
+    --accent-soft: #F8EBCD;
     --accent-ink: #FFFFFF;
-    --action: #2458D6;
-    --action-hover: #1D46B0;
+    --action: #B3261E;
+    --action-hover: #8F1E17;
     --action-ink: #FFFFFF;
     --amber: #8A5A12; /* 原本 #E8A33D 在白底上文字對比只有約 2.16:1，未達 WCAG AA 4.5:1，加深至此（issue #012） */
-    --chip-bg: #EEF3FA;
-    --shadow: 0 10px 30px rgba(37, 99, 235, .10);
-    --shadow-lg: 0 18px 50px rgba(37, 99, 235, .16);
+    --chip-bg: #F1EAD6;
+    --shadow: 0 10px 30px rgba(43, 27, 15, .12);
+    --shadow-lg: 0 18px 50px rgba(43, 27, 15, .20);
+    --font-num: ui-monospace, "SF Mono", "Roboto Mono", "Consolas", monospace;
 
     /* 圓角弧度 */
     --radius-sm: 8px;
@@ -52,7 +55,12 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .app { max-width: 1020px; margin: 0 auto; padding: 28px 20px 48px; }
+  .app { max-width: 1020px; margin: 0 auto; padding: 28px 20px calc(48px + env(safe-area-inset-bottom)); }
+  @media (max-width: 380px) {
+    .app { padding-left: 14px; padding-right: 14px; }
+    .wheel-panel { padding: 22px 14px 26px; }
+    .slip { padding: 20px 14px; }
+  }
 
   /* ── PWA 安裝提示條（UX 優化 #2）── */
   .pwa-install-bar {
@@ -73,7 +81,8 @@
     display: flex; justify-content: space-between; align-items: center;
     flex-wrap: wrap; gap: 14px; margin-bottom: 22px;
   }
-  .masthead-title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .masthead-title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .brand-block { display: flex; flex-direction: column; gap: 2px; }
   .brand {
     font-size: 34px; font-weight: 900; letter-spacing: 2px; margin: 0;
     display: inline-flex; align-items: baseline;
@@ -84,6 +93,11 @@
   }
   .brand.spinning .zhuan { animation: zhuan-spin 1s linear infinite; }
   @keyframes zhuan-spin { to { transform: rotate(360deg); } }
+  .brand-tagline { margin: 0; font-size: var(--fs-sm); color: var(--text-2); letter-spacing: .5px; }
+  @media (max-width: 420px) {
+    .brand { font-size: 27px; letter-spacing: 1px; }
+    .brand-tagline { font-size: 11px; }
+  }
 
   /* 在 LINE App 內開啟（LIFF）時顯示的 LINE 個人資料，外部瀏覽器打開
      時整個 hidden，不會出現在畫面上。 */
@@ -96,10 +110,14 @@
   main.board { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
   @media (max-width: 860px) { main.board { grid-template-columns: 1fr; } }
 
+  /* 兩張卡片視覺上是同一個分格餐盤裡的兩格：轉盤格用辣椒紅、條件格
+     用咖哩金收邊，一眼分得出「主餐區」跟「配菜區」。 */
   .card {
-    background: var(--surface); border: 1px solid var(--line);
+    background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--line);
     border-radius: var(--radius-lg); box-shadow: var(--shadow);
   }
+  .wheel-panel { border-top-color: var(--action); }
+  .slip { border-top-color: var(--accent); }
 
   /* ── wheel panel ── */
   .wheel-panel { padding: 26px 22px 30px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
@@ -190,7 +208,7 @@
     font-size: var(--fs-base); color: var(--text-2); letter-spacing: 1px;
     display: flex; align-items: center; gap: 8px;
   }
-  .match-count b { color: var(--text); font-size: 18px; font-variant-numeric: tabular-nums; }
+  .match-count b { color: var(--text); font-size: 18px; font-variant-numeric: tabular-nums; font-family: var(--font-num); }
 
   .wheel-stage { position: relative; width: min(100%, 430px); aspect-ratio: 1; }
   canvas#wheel { width: 100%; height: 100%; display: block; }
@@ -237,6 +255,7 @@
   .field label { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--fs-base); font-weight: 700; }
   .field output {
     color: var(--action); font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums;
+    font-family: var(--font-num);
   }
   #originField label { margin-bottom: 8px; }
   /* 出發點常用地標數量不固定，改用可換行的 pill 列，不再是固定兩顆等分。 */
@@ -352,18 +371,37 @@
     animation: pop .35s cubic-bezier(.2, 1.4, .4, 1);
   }
   @keyframes pop { from { transform: scale(.7); opacity: 0; } }
+  /* 簽名視覺：像被蓋了章的訂單存根，斜斜貼在票卡左上角（issue: UIUX 優化）。 */
+  .ticket::before {
+    content: "拍板\A 定案";
+    position: absolute; top: -14px; left: 20px; z-index: 1;
+    width: 72px; height: 72px; border-radius: 50%;
+    border: 2px solid var(--action);
+    box-shadow: 0 0 0 4px var(--surface), 0 0 0 6px var(--action);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--action); font-size: 12px; font-weight: 900; letter-spacing: 2px;
+    line-height: 1.5; text-align: center; white-space: pre-line;
+    transform: rotate(-13deg); opacity: .85; mix-blend-mode: multiply;
+    pointer-events: none;
+  }
   .ticket-inner {
     border: 2px dashed var(--line); border-radius: 14px; padding: 26px 22px 22px;
     display: flex; flex-direction: column; gap: 14px; text-align: center;
   }
   .ticket .eyebrow { font-size: var(--fs-md); letter-spacing: 5px; color: var(--accent); font-weight: 700; }
+  /* 抬頭下方的撕線孔，呼應「今日條件」的訂單/存根語彙。 */
+  .ticket .eyebrow::after {
+    content: ""; display: block; height: 11px; margin: 12px -22px -2px;
+    background-image: radial-gradient(circle 5.5px, rgba(43, 27, 15, .35) 99%, transparent 100%);
+    background-size: 18px 18px; background-position: 9px center; background-repeat: repeat-x;
+  }
   .ticket .r-title { font-size: 30px; font-weight: 900; line-height: 1.25; text-wrap: balance; margin: 0; }
   .ticket .badges { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
   .badge {
     background: var(--chip-bg); border-radius: var(--radius-pill); padding: 4px 12px; font-size: var(--fs-md);
     font-variant-numeric: tabular-nums;
   }
-  .badge.money { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .badge.money { background: var(--accent-soft); color: var(--accent); font-weight: 700; font-family: var(--font-num); }
   .ticket .addr { font-size: 13.5px; color: var(--text-2); }
   .ticket .note { font-size: var(--fs-md); color: var(--amber); font-weight: 700; }
   .ticket .r-quota { font-size: var(--fs-sm); color: var(--text-2); }
@@ -376,8 +414,8 @@
     font-weight: 700; cursor: pointer; text-decoration: none; display: block; text-align: center;
     transition: filter .12s, transform .12s;
   }
-  .btn:hover { filter: brightness(1.06); }
-  .btn:active { transform: scale(.98); }
+  .btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .btn:active { transform: scale(.98) translateY(0); }
   .btn[hidden] { display: none; } /* .btn 的 display:block 會蓋掉 hidden 屬性的預設樣式，要另外補（issue #046） */
   .btn-go { background: var(--accent); color: var(--accent-ink); }
   .btn-again { background: var(--chip-bg); color: var(--text); }
@@ -443,6 +481,7 @@
   .quota-badge {
     background: var(--accent-soft); color: var(--accent); font-weight: 700;
     border-radius: var(--radius-pill); padding: 4px 12px; font-size: var(--fs-md); font-variant-numeric: tabular-nums;
+    font-family: var(--font-num);
   }
   .quota-badge[hidden] { display: none; }
   .quota-badge.spent { background: color-mix(in srgb, var(--action) 16%, transparent); color: var(--action); }
