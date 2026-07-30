@@ -1259,9 +1259,37 @@ async function sendLiffMessageWithFallback(flexMsg, plainText) {
   }
 }
 function describeLiffError(e) {
-  if (!e) return "";
-  const parts = [e.code, e.message].filter(Boolean);
-  return parts.length ? parts.join(" / ") : String(e);
+  if (e === undefined) return "(catch 到 undefined，LIFF 內部用空的 reject，沒有給任何錯誤內容)";
+  if (e === null) return "(catch 到 null，LIFF 內部用空的 reject，沒有給任何錯誤內容)";
+  const bits = [];
+  if (e.code) bits.push(`code=${e.code}`);
+  if (e.message) bits.push(`message=${e.message}`);
+  if (e.name && e.name !== "Error") bits.push(`name=${e.name}`);
+  if (!bits.length) {
+    try {
+      const own = Object.getOwnPropertyNames(e).filter((k) => k !== "stack");
+      if (own.length) bits.push(JSON.stringify(Object.fromEntries(own.map((k) => [k, e[k]]))));
+    } catch { /* 不影響顯示，退回下面的 String(e) */ }
+  }
+  if (!bits.length) bits.push(`raw=${String(e)}`);
+  return bits.join(" / ");
+}
+/* 卡片格式送失敗時，除了錯誤本身，環境資訊（LIFF SDK／LINE App／OS／
+   聊天室類型）也是重要線索——有些機型或舊版 LINE 對 Flex 卡片比較挑。 */
+function liffEnvSummary() {
+  try {
+    const parts = [];
+    if (typeof liff.getOS === "function") parts.push(`os=${liff.getOS()}`);
+    if (typeof liff.getVersion === "function") parts.push(`sdk=${liff.getVersion()}`);
+    if (typeof liff.getLineVersion === "function") parts.push(`line=${liff.getLineVersion()}`);
+    if (typeof liff.getContext === "function") {
+      const ctx = liff.getContext();
+      if (ctx && ctx.type) parts.push(`chat=${ctx.type}`);
+    }
+    return parts.join(" ");
+  } catch {
+    return "";
+  }
 }
 
 /* 分享優先順序：
@@ -1649,7 +1677,7 @@ $("liffReportBtn").onclick = async () => {
     if (result.usedFallback) {
       // 診斷用：卡片格式送失敗、退回純文字送成功時先別關窗，讓使用者看得到
       // 卡片實際失敗的原因，回報給我們排查（穩定後會拿掉，改回直接關窗）。
-      setLiffMsg(`已用純文字送出（卡片格式失敗：${describeLiffError(result.flexError)}）`, "err");
+      setLiffMsg(`已用純文字送出（卡片格式失敗：${describeLiffError(result.flexError)}｜${liffEnvSummary()}）`, "err");
       btn.disabled = false;
       return;
     }
@@ -2662,7 +2690,7 @@ $("groupResultLiffBtn").onclick = async () => {
     } ${currentGroupResultFlex.mapUrl}`;
     const result = await sendLiffMessageWithFallback(flex, plainText);
     if (result.usedFallback) {
-      setGroupResultLiffMsg(`已用純文字送出（卡片格式失敗：${describeLiffError(result.flexError)}）`, "err");
+      setGroupResultLiffMsg(`已用純文字送出（卡片格式失敗：${describeLiffError(result.flexError)}｜${liffEnvSummary()}）`, "err");
       btn.disabled = false;
       return;
     }
