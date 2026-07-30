@@ -41,12 +41,13 @@
   }
 
   * { box-sizing: border-box; }
-  /* LINE 內建瀏覽器等 WebView 對某個元素「不小心」比 viewport 寬（例如
-     沒斷行的長字串、圖片原始尺寸）比一般桌面瀏覽器更容易直接讓整頁被
-     橫向撐開，逼使用者要手動縮放/橫向拖曳才看得到完整版面。這裡當作
-     最後一道防線：頁面本身不允許橫向捲動，任何不小心撐寬的內容用
-     clip 擋掉，不會整頁被推寬。 */
-  html, body { margin: 0; padding: 0; max-width: 100%; overflow-x: hidden; }
+  /* 之前這裡加過 overflow-x:hidden 想擋橫向溢位，但那只是把撐寬的內容
+     裁掉、使用者連捲動/縮放都看不到被裁掉的部分，反而更糟（issue：
+     手機版被裁切又滑不動）。真正原因是 .wheel-stage 裡的 canvas 帶著
+     min-width:auto 的 grid/flex item 內容最小尺寸撐寬版面（見下面
+     .wheel-stage 的 min-width:0 修正），這裡不再用 clip 硬擋，維持
+     頁面本來就能捲動/縮放的預設行為當作最後防線就好。 */
+  html, body { margin: 0; padding: 0; }
   img, svg, canvas { max-width: 100%; height: auto; }
   /* 視覺上隱藏但螢幕閱讀器讀得到，給只需要播報、不需要顯示的文字用 */
   .sr-only {
@@ -109,6 +110,14 @@
   @media (min-width: 861px) {
     main.board { grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; }
   }
+  /* grid／flex item 預設 min-width:auto，不會縮小到比內容的「最小內容
+     尺寸」還窄——.wheel-stage 裡的 <canvas> 是 replaced element，帶著
+     width="1000" 這個 HTML 屬性的內在尺寸，即使 CSS 寫 width:100% 也一樣
+     會把這個 1000px 往上傳給 grid item，逼 main.board／.app／body 被撐
+     成比手機螢幕寬很多、卻只能整個被裁掉一塊也滑不到（issue: RWD 手機
+     版被裁切）。整條鏈路補 min-width:0 才能真的縮到 viewport 寬度。 */
+  .wheel-panel, .slip { min-width: 0; }
+  .wheel-stage { min-width: 0; }
 
   /* 兩張卡片視覺上是同一個分格餐盤裡的兩格：轉盤格用辣椒紅、條件格
      用咖哩金收邊，一眼分得出「主餐區」跟「配菜區」。 */
