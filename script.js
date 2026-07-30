@@ -1214,10 +1214,18 @@ function buildResultFlexMessage(r, mapUrl, opts = {}) {
   if (badges.length) body.push({ type: "box", layout: "horizontal", wrap: true, spacing: "xs", margin: "md", contents: badges });
   if (r.addr) body.push({ type: "text", text: r.addr, size: "sm", color: "#6B7280", wrap: true, margin: "md" });
   if (r.note) body.push({ type: "text", text: r.note, size: "xs", color: "#9CA3AF", wrap: true, margin: "xs" });
-  const metaText = metaLines.filter(Boolean).join("\n");
-  if (metaText) {
+  // LINE Flex Message 的 text 元件不支援字串裡帶字面 \n 換行——之前用
+  // metaLines.join("\n") 塞進單一 text 元件，遇到兩行以上（例如群組結果
+  // 同時有「誰轉到的」跟「第幾次」）會被 LINE 伺服器判定成無效格式，
+  // liff.sendMessages() 收到 400 就整包送不出去（這正是「卡片格式失敗」
+  // 診斷訊息顯示 code=400 的原因）。改成每一行各自一個 text 元件才是
+  // Flex Message 正確的多行寫法。
+  const metaLinesList = metaLines.filter(Boolean);
+  if (metaLinesList.length) {
     body.push({ type: "separator", margin: "md" });
-    body.push({ type: "text", text: metaText, size: "xs", color: "#9CA3AF", wrap: true, margin: "md" });
+    metaLinesList.forEach((line, i) => {
+      body.push({ type: "text", text: line, size: "xs", color: "#9CA3AF", wrap: true, margin: i === 0 ? "md" : "xs" });
+    });
   }
 
   return {
