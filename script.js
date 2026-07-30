@@ -1244,14 +1244,24 @@ function spinCountMeta(used, limit) {
 /* liff.sendMessages() 送 Flex Message 失敗時（可能是特定機型/LINE 版本
    對 Flex 卡片格式比較挑，也可能是別的原因）先退回純文字重試一次，
    不要讓「回報」/「傳到聊天室」整個失敗、扣了使用者一次操作卻什麼都
-   沒送出去。兩次都失敗才把（純文字這次的）錯誤丟給呼叫端顯示。 */
+   沒送出去。兩次都失敗才把（純文字這次的）錯誤丟給呼叫端顯示。
+   回傳 usedFallback/flexError 讓呼叫端可以在畫面上顯示「卡片格式為什麼
+   失敗」這個診斷資訊——目前還在抓卡片格式失敗的根本原因，先讓使用者
+   看得到實際錯在哪，之後穩定了再拿掉。 */
 async function sendLiffMessageWithFallback(flexMsg, plainText) {
   try {
     await liff.sendMessages([flexMsg]);
+    return { usedFallback: false };
   } catch (e) {
     console.error("liff.sendMessages flex failed, falling back to text:", e);
     await liff.sendMessages([{ type: "text", text: plainText }]);
+    return { usedFallback: true, flexError: e };
   }
+}
+function describeLiffError(e) {
+  if (!e) return "";
+  const parts = [e.code, e.message].filter(Boolean);
+  return parts.length ? parts.join(" / ") : String(e);
 }
 
 /* 分享優先順序：
@@ -1635,7 +1645,14 @@ $("liffReportBtn").onclick = async () => {
     const eyebrow = "根據午餐大轉輪，我今天的午餐是";
     const metaLines = [spinCountMeta(currentResultUsedToday, auth.limit)];
     const flex = buildResultFlexMessage(currentResult, mapUrl, { eyebrow, metaLines });
-    await sendLiffMessageWithFallback(flex, `${eyebrow}：【${currentResult.name}】${[...metaLines].filter(Boolean).join("・")} ${mapUrl}`);
+    const result = await sendLiffMessageWithFallback(flex, `${eyebrow}：【${currentResult.name}】${[...metaLines].filter(Boolean).join("・")} ${mapUrl}`);
+    if (result.usedFallback) {
+      // 診斷用：卡片格式送失敗、退回純文字送成功時先別關窗，讓使用者看得到
+      // 卡片實際失敗的原因，回報給我們排查（穩定後會拿掉，改回直接關窗）。
+      setLiffMsg(`已用純文字送出（卡片格式失敗：${describeLiffError(result.flexError)}）`, "err");
+      btn.disabled = false;
+      return;
+    }
     liff.closeWindow();
   } catch (e) {
     // 先印出真正的錯誤內容方便排查（LIFF 錯誤通常帶 code，例如沒有
@@ -2643,7 +2660,12 @@ $("groupResultLiffBtn").onclick = async () => {
     const plainText = `${eyebrow}：${currentGroupResultFlex.r.name}${
       currentGroupResultFlex.metaLines.filter(Boolean).length ? "（" + currentGroupResultFlex.metaLines.filter(Boolean).join("・") + "）" : ""
     } ${currentGroupResultFlex.mapUrl}`;
-    await sendLiffMessageWithFallback(flex, plainText);
+    const result = await sendLiffMessageWithFallback(flex, plainText);
+    if (result.usedFallback) {
+      setGroupResultLiffMsg(`已用純文字送出（卡片格式失敗：${describeLiffError(result.flexError)}）`, "err");
+      btn.disabled = false;
+      return;
+    }
     liff.closeWindow();
   } catch (e) {
     console.error("groupResultLiffBtn sendMessages failed:", e);
