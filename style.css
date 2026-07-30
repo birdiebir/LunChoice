@@ -41,7 +41,13 @@
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  /* LINE 內建瀏覽器等 WebView 對某個元素「不小心」比 viewport 寬（例如
+     沒斷行的長字串、圖片原始尺寸）比一般桌面瀏覽器更容易直接讓整頁被
+     橫向撐開，逼使用者要手動縮放/橫向拖曳才看得到完整版面。這裡當作
+     最後一道防線：頁面本身不允許橫向捲動，任何不小心撐寬的內容用
+     clip 擋掉，不會整頁被推寬。 */
+  html, body { margin: 0; padding: 0; max-width: 100%; overflow-x: hidden; }
+  img, svg, canvas { max-width: 100%; height: auto; }
   /* 視覺上隱藏但螢幕閱讀器讀得到，給只需要播報、不需要顯示的文字用 */
   .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -53,6 +59,7 @@
     font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", "Heiti TC", sans-serif;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    overflow-wrap: break-word; /* 店名／地址／email 等動態內容沒有空白可斷行時，寧可斷字也不要撐寬版面 */
   }
 
   .app { max-width: 1020px; margin: 0 auto; padding: 28px 20px calc(48px + env(safe-area-inset-bottom)); }
