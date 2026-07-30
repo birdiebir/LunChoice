@@ -1211,7 +1211,10 @@ function buildResultFlexMessage(r, mapUrl, opts = {}) {
     { type: "text", text: eyebrow, size: "xs", weight: "bold", color: "#2563EB" },
     { type: "text", text: r.name, size: "xl", weight: "bold", wrap: true, margin: "sm" }
   ];
-  if (badges.length) body.push({ type: "box", layout: "horizontal", wrap: true, spacing: "xs", margin: "md", contents: badges });
+  // wrap 是 text 元件才有的屬性，box 元件沒有這個欄位——加了會被 LINE
+  // 判定成 INVALID_MESSAGE（結構不合法），這正是實測 code=400／
+  // message=(code: INVALID_MESSAGE) invalid message 的根本原因。
+  if (badges.length) body.push({ type: "box", layout: "horizontal", spacing: "xs", margin: "md", contents: badges });
   if (r.addr) body.push({ type: "text", text: r.addr, size: "sm", color: "#6B7280", wrap: true, margin: "md" });
   if (r.note) body.push({ type: "text", text: r.note, size: "xs", color: "#9CA3AF", wrap: true, margin: "xs" });
   // LINE Flex Message 的 text 元件不支援字串裡帶字面 \n 換行——之前用
