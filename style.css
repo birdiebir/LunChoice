@@ -56,11 +56,6 @@
   }
 
   .app { max-width: 1020px; margin: 0 auto; padding: 28px 20px calc(48px + env(safe-area-inset-bottom)); }
-  @media (max-width: 380px) {
-    .app { padding-left: 14px; padding-right: 14px; }
-    .wheel-panel { padding: 22px 14px 26px; }
-    .slip { padding: 20px 14px; }
-  }
 
   /* ── PWA 安裝提示條（UX 優化 #2）── */
   .pwa-install-bar {
@@ -94,10 +89,6 @@
   .brand.spinning .zhuan { animation: zhuan-spin 1s linear infinite; }
   @keyframes zhuan-spin { to { transform: rotate(360deg); } }
   .brand-tagline { margin: 0; font-size: var(--fs-sm); color: var(--text-2); letter-spacing: .5px; }
-  @media (max-width: 420px) {
-    .brand { font-size: 27px; letter-spacing: 1px; }
-    .brand-tagline { font-size: 11px; }
-  }
 
   /* 在 LINE App 內開啟（LIFF）時顯示的 LINE 個人資料，外部瀏覽器打開
      時整個 hidden，不會出現在畫面上。 */
@@ -106,9 +97,11 @@
   .line-profile-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
   .line-profile-avatar[hidden] { display: none; }
 
-  /* ── layout ── */
-  main.board { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
-  @media (max-width: 860px) { main.board { grid-template-columns: 1fr; } }
+  /* ── layout（mobile first：預設單欄堆疊，桌面寬螢幕才變兩欄）── */
+  main.board { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
+  @media (min-width: 861px) {
+    main.board { grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; }
+  }
 
   /* 兩張卡片視覺上是同一個分格餐盤裡的兩格：轉盤格用辣椒紅、條件格
      用咖哩金收邊，一眼分得出「主餐區」跟「配菜區」。 */
@@ -504,7 +497,7 @@
   .gate-card p { margin: 0; font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
   .gate-card input[type="email"], .gate-card input[type="password"] {
     width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: var(--radius-md);
-    font: inherit; font-size: var(--fs-lg); background: var(--surface-2); color: var(--text);
+    font: inherit; font-size: 16px; background: var(--surface-2); color: var(--text);
   }
   .gate-card input[type="email"]:focus-visible, .gate-card input[type="password"]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .gate-card .g-msg { font-size: var(--fs-md); min-height: 18px; }
@@ -577,7 +570,7 @@
   .spot-row .spot-field { flex: 1; }
   .spot-card input, .spot-card select {
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
-    font: inherit; font-size: var(--fs-base); background: var(--surface-2); color: var(--text); box-sizing: border-box;
+    font: inherit; font-size: 16px; background: var(--surface-2); color: var(--text); box-sizing: border-box;
   }
   .spot-card input:focus-visible, .spot-card select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .spot-msg { font-size: var(--fs-md); min-height: 18px; }
@@ -616,7 +609,7 @@
   .profile-field { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-md); font-weight: 700; color: var(--text-2); }
   .profile-card input[type="text"], .profile-card input[type="file"] {
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
-    font: inherit; font-size: var(--fs-base); background: var(--surface-2); color: var(--text); box-sizing: border-box;
+    font: inherit; font-size: 16px; background: var(--surface-2); color: var(--text); box-sizing: border-box;
   }
   .profile-card input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .profile-msg { font-size: var(--fs-md); min-height: 18px; }
@@ -655,7 +648,7 @@
   }
   .groups-card input[type="text"], .groups-card input[type="email"] {
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
-    font: inherit; font-size: var(--fs-base); background: var(--surface-2); color: var(--text); box-sizing: border-box;
+    font: inherit; font-size: 16px; background: var(--surface-2); color: var(--text); box-sizing: border-box;
   }
   .groups-card input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .groups-card .btn[disabled] { opacity: .55; cursor: progress; }
@@ -752,3 +745,33 @@
   .bonus-invite-emoji { font-size: 32px; }
   .bonus-invite-text { font-size: var(--fs-md); color: var(--text-2); line-height: 1.5; }
   .bonus-invite .btn { padding: 10px 16px; font-size: var(--fs-base); }
+
+  /* ══════════════════════════════════════════════════════════
+     手機（≤640px）整體收邊
+     這個 app 主要是在 LINE 內建瀏覽器（LIFF）用手機打開，桌面版反而是
+     少數情境，所以這裡不是「桌面樣式硬塞進小螢幕」的縮小版，而是把
+     手機該有的密度／字級／版面重新調過：卡片留白收窄、標題跟著螢幕
+     寬度降級、彈窗更貼近滿版。桌面（>640px）維持原本比較寬鬆的留白。
+     ══════════════════════════════════════════════════════════ */
+  @media (max-width: 640px) {
+    .app { padding: 16px 14px calc(40px + env(safe-area-inset-bottom)); }
+    header.masthead { margin-bottom: 16px; gap: 10px; }
+    .brand { font-size: 26px; letter-spacing: 1px; }
+    .brand-tagline { font-size: 11px; }
+    main.board { gap: 14px; }
+    .card { border-radius: var(--radius-md); }
+    .wheel-panel { padding: 18px 12px 22px; gap: 14px; }
+    .slip { padding: 18px 14px; gap: 16px; }
+    .wheel-stage { width: min(100%, 340px); }
+    .roster-grid, .deleted-roster .roster-grid { grid-template-columns: 1fr; gap: 8px; }
+    details.roster { margin-top: 18px; }
+
+    /* 彈窗在手機上更貼近滿版，減少兩側留白被「桌面置中卡片」感覺吃掉。 */
+    .veil, .gate, .bonus-veil, .spot-veil, .profile-veil, .groups-veil { padding: 12px; }
+    .ticket-inner { padding: 20px 16px 18px; }
+    .ticket::before { width: 62px; height: 62px; font-size: 11px; top: -10px; left: 12px; }
+    .spot-card, .profile-card, .groups-card, .gate-card { padding: 20px 16px; }
+
+    /* 觸控情境下 hover 微浮動效果沒有意義，拿掉避免點擊時視覺跳動。 */
+    .btn:hover { transform: none; }
+  }
