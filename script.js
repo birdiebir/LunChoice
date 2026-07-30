@@ -1241,6 +1241,18 @@ function spinCountMeta(used, limit) {
   if (!used) return null;
   return limit ? `今天第 ${used}／${limit} 次轉盤結果` : `今天第 ${used} 次轉盤結果`;
 }
+/* liff.sendMessages() 送 Flex Message 失敗時（可能是特定機型/LINE 版本
+   對 Flex 卡片格式比較挑，也可能是別的原因）先退回純文字重試一次，
+   不要讓「回報」/「傳到聊天室」整個失敗、扣了使用者一次操作卻什麼都
+   沒送出去。兩次都失敗才把（純文字這次的）錯誤丟給呼叫端顯示。 */
+async function sendLiffMessageWithFallback(flexMsg, plainText) {
+  try {
+    await liff.sendMessages([flexMsg]);
+  } catch (e) {
+    console.error("liff.sendMessages flex failed, falling back to text:", e);
+    await liff.sendMessages([{ type: "text", text: plainText }]);
+  }
+}
 
 /* 分享優先順序：
    1. LIFF 的 shareTargetPicker——LINE 原生的「選好友/群組」分享面板，
@@ -1620,14 +1632,17 @@ $("liffReportBtn").onclick = async () => {
   setLiffMsg("回報中…", "");
   try {
     const mapUrl = $("rMap").href;
-    const flex = buildResultFlexMessage(currentResult, mapUrl, {
-      eyebrow: "根據午餐大轉輪，我今天的午餐是",
-      metaLines: [spinCountMeta(currentResultUsedToday, auth.limit)]
-    });
-    await liff.sendMessages([flex]);
+    const eyebrow = "根據午餐大轉輪，我今天的午餐是";
+    const metaLines = [spinCountMeta(currentResultUsedToday, auth.limit)];
+    const flex = buildResultFlexMessage(currentResult, mapUrl, { eyebrow, metaLines });
+    await sendLiffMessageWithFallback(flex, `${eyebrow}：【${currentResult.name}】${[...metaLines].filter(Boolean).join("・")} ${mapUrl}`);
     liff.closeWindow();
   } catch (e) {
-    setLiffMsg("⚠️ 回報失敗，等一下再試試", "err");
+    // 先印出真正的錯誤內容方便排查（LIFF 錯誤通常帶 code，例如沒有
+    // chat_message.write 權限、或不是在聊天室情境下開的小程式），
+    // 畫面上的提示只保留簡短訊息，不把整包錯誤丟給使用者看。
+    console.error("liffReportBtn sendMessages failed:", e);
+    setLiffMsg(`⚠️ 回報失敗：${e?.message || e?.code || "等一下再試試"}`, "err");
     btn.disabled = false;
   }
 };
@@ -2621,13 +2636,18 @@ $("groupResultLiffBtn").onclick = async () => {
   btn.disabled = true;
   setGroupResultLiffMsg("傳送中…", "");
   try {
+    const eyebrow = "今天大家跟著吃";
     const flex = buildResultFlexMessage(currentGroupResultFlex.r, currentGroupResultFlex.mapUrl, {
-      eyebrow: "今天大家跟著吃", metaLines: currentGroupResultFlex.metaLines
+      eyebrow, metaLines: currentGroupResultFlex.metaLines
     });
-    await liff.sendMessages([flex]);
+    const plainText = `${eyebrow}：${currentGroupResultFlex.r.name}${
+      currentGroupResultFlex.metaLines.filter(Boolean).length ? "（" + currentGroupResultFlex.metaLines.filter(Boolean).join("・") + "）" : ""
+    } ${currentGroupResultFlex.mapUrl}`;
+    await sendLiffMessageWithFallback(flex, plainText);
     liff.closeWindow();
   } catch (e) {
-    setGroupResultLiffMsg("⚠️ 傳送失敗，等一下再試試", "err");
+    console.error("groupResultLiffBtn sendMessages failed:", e);
+    setGroupResultLiffMsg(`⚠️ 傳送失敗：${e?.message || e?.code || "等一下再試試"}`, "err");
     btn.disabled = false;
   }
 };
