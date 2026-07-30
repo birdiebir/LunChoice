@@ -695,6 +695,11 @@ alter table public.group_spin_results drop constraint if exists group_spin_resul
 alter table public.group_spin_results add constraint group_spin_results_spinner_id_fkey
   foreign key (spinner_id) references auth.users(id) on delete set null;
 
+-- spin_number：這筆結果是轉盤人「今天第幾次轉盤」（對照 spins 表的 used）。
+-- 純粹給分享/回報用的顯示資訊，查不到（例如舊資料、沒傳）就是 null，
+-- 前端顯示時會整段跳過，不影響其他欄位。
+alter table public.group_spin_results add column if not exists spin_number int;
+
 alter table public.group_spin_results enable row level security;
 drop policy if exists "members can read group results" on public.group_spin_results;
 create policy "members can read group results" on public.group_spin_results
@@ -792,7 +797,7 @@ begin
 
   select json_build_object(
            'winner_name', winner_name, 'wheel_mode', wheel_mode,
-           'spinner_id', spinner_id, 'created_at', created_at
+           'spinner_id', spinner_id, 'created_at', created_at, 'spin_number', spin_number
          )
     into v_result
     from public.group_spin_results
@@ -904,7 +909,15 @@ revoke all on function public.leave_group(bigint) from public, anon;
 grant execute on function public.leave_group(bigint) to authenticated;
 
 -- ── record_group_result：轉盤人回填今天的結果，內部驗證真的輪到你 ──
-create or replace function public.record_group_result(p_group_id bigint, p_winner_name text, p_wheel_mode text default 'default')
+-- p_spin_number：這是轉盤人「今天第幾次轉盤」，純粹給群組看板/分享卡片
+-- 顯示用，不做任何額度判斷（額度早在 record_spin() 那邊就把關過了）。
+-- 新增這個參數讓函式從 3 個參數變成 4 個，CREATE OR REPLACE 不會覆蓋掉
+-- 舊的 3 參數版本（會變成兩個同名但參數數量不同的重載函式同時存在），
+-- 所以先明確 drop 掉舊簽名，確保全站只有一個版本在跑。
+drop function if exists public.record_group_result(bigint, text, text);
+create or replace function public.record_group_result(
+  p_group_id bigint, p_winner_name text, p_wheel_mode text default 'default', p_spin_number int default null
+)
 returns json
 language plpgsql
 security definer
@@ -921,15 +934,24 @@ begin
     return json_build_object('ok', false, 'error', 'not_your_turn');
   end if;
 
-  insert into public.group_spin_results (group_id, spinner_id, winner_name, wheel_mode)
-  values (p_group_id, v_uid, left(p_winner_name, 120), left(coalesce(nullif(trim(p_wheel_mode), ''), 'default'), 40))
-  on conflict (group_id, spin_day) do nothing;
+  -- 用 do update（不是 do nothing）：同一天輪到的人可能轉好幾次（每日
+  -- 基礎額度 3 次＋看廣告加轉），圈子看板要反映「最後一次」轉到的結果，
+  -- 不然會卡在當天第一次轉盤的結果，不管後面怎麼轉畫面都不會變
+  -- （回報：無論怎麼轉都是同一家）。
+  insert into public.group_spin_results (group_id, spinner_id, winner_name, wheel_mode, created_at, spin_number)
+  values (p_group_id, v_uid, left(p_winner_name, 120), left(coalesce(nullif(trim(p_wheel_mode), ''), 'default'), 40), now(), p_spin_number)
+  on conflict (group_id, spin_day) do update
+    set spinner_id  = excluded.spinner_id,
+        winner_name = excluded.winner_name,
+        wheel_mode  = excluded.wheel_mode,
+        created_at  = excluded.created_at,
+        spin_number = excluded.spin_number;
 
   return json_build_object('ok', true);
 end;
 $$;
-revoke all on function public.record_group_result(bigint, text, text) from public, anon;
-grant execute on function public.record_group_result(bigint, text, text) to authenticated;
+revoke all on function public.record_group_result(bigint, text, text, int) from public, anon;
+grant execute on function public.record_group_result(bigint, text, text, int) to authenticated;
 
 -- ── Realtime：群組結果要即時廣播給全組 ─────────────────────
 do $$

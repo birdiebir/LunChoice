@@ -1108,11 +1108,12 @@ async function spin() {
   }
 
   auth.remaining = res.remaining;
+  auth.limit = res.limit ?? auth.limit;
   updateQuota();
-  animateSpin(res.spin_id, spinList);
+  animateSpin(res.spin_id, spinList, res.used);
 }
 
-function animateSpin(spinId, list) {
+function animateSpin(spinId, list, usedToday) {
   if (state.spinning || list.length === 0) return;
   const n = list.length;
   const winner = Math.floor(Math.random() * n);
@@ -1145,8 +1146,8 @@ function animateSpin(spinId, list) {
       $("brand").classList.remove("spinning");
       refresh();   // 依登入狀態與剩餘次數重新決定按鈕是否可按
       updateQuota();  // 轉盤停下後才決定是否顯示「看廣告多轉一次」，避免蓋住轉動畫面
-      showResult(list[winner]);
-      recordSpinOutcome(list[winner], spinId);
+      showResult(list[winner], usedToday);
+      recordSpinOutcome(list[winner], spinId, usedToday);
     }
   }
   requestAnimationFrame(frame);
@@ -1155,7 +1156,7 @@ function animateSpin(spinId, list) {
 /* 轉盤動畫結束、知道轉到誰之後才回填：個人紀錄 + （如果在群組模式）廣播給全組。
    都是背景動作，不影響畫面上已經顯示的結果，但失敗時要讓使用者知道
    （issue #002）——不然次數已經扣了，畫面卻悄悄跟後端狀態脫節。 */
-async function recordSpinOutcome(winner, spinId) {
+async function recordSpinOutcome(winner, spinId, usedToday) {
   try {
     if (spinId) {
       const { error } = await supabase.rpc("set_spin_result", {
@@ -1171,7 +1172,8 @@ async function recordSpinOutcome(winner, spinId) {
   if (activeGroup && state.wheelMode === "shared") {
     try {
       const { error } = await supabase.rpc("record_group_result", {
-        p_group_id: activeGroup.group_id, p_winner_name: winner.name, p_wheel_mode: state.wheelMode
+        p_group_id: activeGroup.group_id, p_winner_name: winner.name, p_wheel_mode: state.wheelMode,
+        p_spin_number: usedToday ?? null
       });
       if (error) throw error;
     } catch (e) {
@@ -1184,22 +1186,80 @@ async function recordSpinOutcome(winner, spinId) {
 }
 
 /* ══════════ 結果 ══════════ */
+/* LINE Flex Message：轉盤結果卡片。比純文字多帶分類／價位／走路時間徽章
+   跟一顆「開 Google 地圖」按鈕，對方收到不用再自己查地址、複製店名去搜尋。
+   r 允許只有 name（例如飯搭子圈結果裡地點後來被刪掉/改名，查無完整資料
+   時的退化情況）——每個欄位個別判斷有沒有資料再決定要不要放進卡片，
+   缺資料時就單純少一段，不會噴錯或顯示 undefined。altText 是 LINE
+   規範要求一定要帶的純文字備援（聊天室列表預覽、收不到 flex 渲染時用）。 */
+function flexBadge(text, accent) {
+  return {
+    type: "box", layout: "vertical",
+    backgroundColor: accent ? "#E8F0FE" : "#F3F4F6",
+    cornerRadius: "6px", paddingAll: "6px", paddingStart: "10px", paddingEnd: "10px",
+    contents: [{ type: "text", text, size: "xs", weight: "bold", color: accent ? "#2563EB" : "#4B5563" }]
+  };
+}
+function buildResultFlexMessage(r, mapUrl, opts = {}) {
+  const { eyebrow = "今日午餐就決定是", metaLines = [] } = opts;
+  const badges = [];
+  if (r.cat) badges.push(flexBadge(`${CAT_EMOJI[r.cat] || "🍽️"} ${r.cat}`));
+  if (r.price) badges.push(flexBadge(`NT$${r.price[0]}–${r.price[1]}`, true));
+  if (r.walk != null || r.ll) badges.push(flexBadge(`🚶 ${walkMinutesFor(r)} 分鐘`));
+
+  const body = [
+    { type: "text", text: eyebrow, size: "xs", weight: "bold", color: "#2563EB" },
+    { type: "text", text: r.name, size: "xl", weight: "bold", wrap: true, margin: "sm" }
+  ];
+  if (badges.length) body.push({ type: "box", layout: "horizontal", wrap: true, spacing: "xs", margin: "md", contents: badges });
+  if (r.addr) body.push({ type: "text", text: r.addr, size: "sm", color: "#6B7280", wrap: true, margin: "md" });
+  if (r.note) body.push({ type: "text", text: r.note, size: "xs", color: "#9CA3AF", wrap: true, margin: "xs" });
+  const metaText = metaLines.filter(Boolean).join("\n");
+  if (metaText) {
+    body.push({ type: "separator", margin: "md" });
+    body.push({ type: "text", text: metaText, size: "xs", color: "#9CA3AF", wrap: true, margin: "md" });
+  }
+
+  return {
+    type: "flex",
+    altText: `${eyebrow}：${r.name}`,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      body: { type: "box", layout: "vertical", paddingAll: "20px", contents: body },
+      footer: {
+        type: "box", layout: "vertical", paddingAll: "12px", spacing: "sm",
+        contents: [{
+          type: "button", style: "primary", color: "#2563EB", height: "sm",
+          action: { type: "uri", label: "🗺️ 開 Google 地圖出發", uri: mapUrl }
+        }]
+      }
+    }
+  };
+}
+function spinCountMeta(used, limit) {
+  if (!used) return null;
+  return limit ? `今天第 ${used}／${limit} 次轉盤結果` : `今天第 ${used} 次轉盤結果`;
+}
+
 /* 分享優先順序：
    1. LIFF 的 shareTargetPicker——LINE 原生的「選好友/群組」分享面板，
       在 LINE 內開啟時直接呼叫得到，選完對方聊天室就收到訊息，比使用者
       自己複製貼上少了好幾道手續。isApiAvailable() 已經把「是不是在
       LINE 環境」「LIFF 版本支不支援」「LIFF console 有沒有開這個功能」
-      都判斷進去了，不支援就自然往下一種方式退。
-   2. 都不行才走 Web Share API（手機上會叫出系統分享面板）。
+      都判斷進去了，不支援就自然往下一種方式退。傳 flexMsg 進來的話這一步
+      會用結果卡片（Flex Message）分享，比純文字好讀也帶得到地圖按鈕。
+   2. 都不行才走 Web Share API（手機上會叫出系統分享面板）——這一步跟
+      下面的剪貼簿備援都只能用純文字，Flex Message 是 LINE 專屬格式。
    3. 兩者都不支援的瀏覽器（多數桌機）才退回複製文字到剪貼簿，按鈕文字
       短暫改成「已複製」當作回饋（功能建議 #3）。
    使用者自己取消分享（shareTargetPicker 取消是 resolve(undefined)、
    navigator.share 取消是 AbortError）都不算失敗，不用再退回複製。 */
-async function shareResult(text, url, btn) {
+async function shareResult(flexMsg, text, url, btn) {
   const content = url ? `${text} ${url}` : text;
   if (liffReady && typeof liff !== "undefined" && typeof liff.isApiAvailable === "function" && liff.isApiAvailable("shareTargetPicker")) {
     try {
-      await liff.shareTargetPicker([{ type: "text", text: content }]);
+      await liff.shareTargetPicker([flexMsg || { type: "text", text: content }]);
       return;
     } catch (e) {
       // shareTargetPicker 意外失敗才繼續往下嘗試其他分享方式
@@ -1224,8 +1284,10 @@ async function shareResult(text, url, btn) {
 }
 
 let currentResult = null;
-function showResult(r) {
+let currentResultUsedToday = null;
+function showResult(r, usedToday) {
   currentResult = r;
+  currentResultUsedToday = usedToday ?? null;
   $("rTitle").textContent = r.name;
   // 共享/個人清單的 cat 是使用者自己送出的資料，組 innerHTML 前要跳脫，
   // 跟 renderRoster()／openGroupResultDetail() 已經在做的一樣（issue #007）；
@@ -1500,7 +1562,11 @@ $("spinBtn").onclick = spin;
 $("rAgain").onclick = () => { hideResult(); setTimeout(spin, 250); };
 $("rShareBtn").onclick = () => {
   if (!currentResult) return;
-  shareResult(`命運轉輪說，今天吃：${currentResult.name} 🍽️`, $("rMap").href, $("rShareBtn"));
+  const mapUrl = $("rMap").href;
+  const flex = buildResultFlexMessage(currentResult, mapUrl, {
+    metaLines: [spinCountMeta(currentResultUsedToday, auth.limit)]
+  });
+  shareResult(flex, `命運轉輪說，今天吃：${currentResult.name} 🍽️`, mapUrl, $("rShareBtn"));
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -1526,6 +1592,7 @@ async function initLiff() {
   }
   if (!isInLiffClient()) return;
   $("liffReportBtn").hidden = false;
+  $("groupResultLiffBtn").hidden = false;
   try {
     const profile = await liff.getProfile();
     showLiffProfile(profile);
@@ -1552,10 +1619,12 @@ $("liffReportBtn").onclick = async () => {
   btn.disabled = true;
   setLiffMsg("回報中…", "");
   try {
-    await liff.sendMessages([{
-      type: "text",
-      text: `根據午餐大轉輪，我今天的午餐是：【${currentResult.name}】${$("rMap").href}`
-    }]);
+    const mapUrl = $("rMap").href;
+    const flex = buildResultFlexMessage(currentResult, mapUrl, {
+      eyebrow: "根據午餐大轉輪，我今天的午餐是",
+      metaLines: [spinCountMeta(currentResultUsedToday, auth.limit)]
+    });
+    await liff.sendMessages([flex]);
     liff.closeWindow();
   } catch (e) {
     setLiffMsg("⚠️ 回報失敗，等一下再試試", "err");
@@ -2475,9 +2544,14 @@ function syncGroupBanner() {
    （預設或共享清單）找出完整資料；找不到（例如共享地點後來被刪掉／改名）
    就退回只用店名查 Google 地圖，仍然給得出地圖按鈕，只是沒有價位等細節。 */
 let currentGroupResultName = null;
+/* 分享／回報用的資料快照：跟畫面上顯示的徽章／地址一致（有找到完整資料
+   就帶分類/價位/走路時間，找不到就退化成只有店名+地圖連結），這樣「詳情」
+   彈窗重新開好幾次、或隔了一段時間才點進來看，分享出去的卡片內容都跟
+   當下畫面顯示的一致。 */
+let currentGroupResultFlex = null;
 function openGroupResultDetail(detail) {
   if (!detail || !detail.today_result) return;
-  const { winner_name, wheel_mode, spinner_id, created_at } = detail.today_result;
+  const { winner_name, wheel_mode, spinner_id, created_at, spin_number } = detail.today_result;
   currentGroupResultName = winner_name;
   const list = wheel_mode === "shared" ? sharedSpots : RESTAURANTS;
   const r = list.find(x => x.name === winner_name) || null;
@@ -2499,13 +2573,20 @@ function openGroupResultDetail(detail) {
   const timeStr = created_at
     ? new Date(created_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })
     : "";
-  $("groupResultMeta").textContent =
-    `由 ${spinner ? spinner.nickname : "某位成員"} 轉到${timeStr ? "・" + timeStr : ""}（${modeTag}）`;
+  const metaLine = `由 ${spinner ? spinner.nickname : "某位成員"} 轉到${timeStr ? "・" + timeStr : ""}（${modeTag}）`;
+  $("groupResultMeta").textContent = metaLine;
 
-  $("groupResultMap").href = (r && r.ll)
+  const mapUrl = (r && r.ll)
     ? `https://www.google.com/maps/search/${encodeURIComponent(r.name)}/@${r.ll[0]},${r.ll[1]},18z`
     : "https://www.google.com/maps/search/?api=1&query=" +
       encodeURIComponent("台北市 " + winner_name + (r?.addr ? " " + r.addr : ""));
+  $("groupResultMap").href = mapUrl;
+
+  currentGroupResultFlex = {
+    r: r || { name: winner_name },
+    mapUrl,
+    metaLines: [metaLine, spinCountMeta(spin_number, null)]
+  };
 
   // 這顆按鈕在群組詳細頁（groupsVeil）裡也點得到，先關掉它再開結果彈窗，
   // 不然會有兩個 aria-modal="true" 的對話框同時開著（issue #010）。
@@ -2513,12 +2594,42 @@ function openGroupResultDetail(detail) {
   // 群組看板點過來（groupsVeil 根本沒開）也不會出錯。
   closeVeil("groupsVeil");
   openVeil("groupResultVeil");
+  setGroupResultLiffMsg("", "");
+  $("groupResultLiffBtn").disabled = false;
   $("groupResultDialog").focus();
 }
 $("groupResultCloseBtn").onclick = () => closeVeil("groupResultVeil");
 $("groupResultShareBtn").onclick = () => {
-  if (!currentGroupResultName) return;
-  shareResult(`今天大家跟著吃：${currentGroupResultName} 🍚`, $("groupResultMap").href, $("groupResultShareBtn"));
+  if (!currentGroupResultName || !currentGroupResultFlex) return;
+  const flex = buildResultFlexMessage(currentGroupResultFlex.r, currentGroupResultFlex.mapUrl, {
+    eyebrow: "今天大家跟著吃", metaLines: currentGroupResultFlex.metaLines
+  });
+  shareResult(flex, `今天大家跟著吃：${currentGroupResultName} 🍚`, currentGroupResultFlex.mapUrl, $("groupResultShareBtn"));
+};
+function setGroupResultLiffMsg(text, kind) {
+  const m = $("groupResultLiffMsg");
+  m.textContent = text;
+  m.className = "r-liff-msg" + (kind ? " " + kind : "");
+}
+/* 跟主結果彈窗的「✅ 回報結果」（liffReportBtn）用同一套 liff.sendMessages
+   直接送出邏輯，差別只在這裡送的是「詳情」彈窗當下看到的群組結果——不管
+   是剛轉完馬上點進來、還是隔了一段時間重新打開「詳情」看，都能直接把
+   同一張結果卡片傳回聊天室，不用像原本只有剛轉完那一次才有這顆按鈕。 */
+$("groupResultLiffBtn").onclick = async () => {
+  if (!currentGroupResultFlex || !isInLiffClient()) return;
+  const btn = $("groupResultLiffBtn");
+  btn.disabled = true;
+  setGroupResultLiffMsg("傳送中…", "");
+  try {
+    const flex = buildResultFlexMessage(currentGroupResultFlex.r, currentGroupResultFlex.mapUrl, {
+      eyebrow: "今天大家跟著吃", metaLines: currentGroupResultFlex.metaLines
+    });
+    await liff.sendMessages([flex]);
+    liff.closeWindow();
+  } catch (e) {
+    setGroupResultLiffMsg("⚠️ 傳送失敗，等一下再試試", "err");
+    btn.disabled = false;
+  }
 };
 $("groupResultVeil").onclick = e => { if (e.target === $("groupResultVeil")) closeVeil("groupResultVeil"); };
 
